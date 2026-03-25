@@ -1,7 +1,7 @@
 title: minorugh.github.io
 description: minoru's online documents on GitHub Pages
 url: https://minorugh.github.io
-remote_theme: https://github.com/JV-conseil/jekyll-theme-read-the-docs
+remote_theme: JV-conseil/jekyll-theme-read-the-docs
 
 # Theme settings:
 readme_index:
@@ -13,15 +13,6 @@ plugins:
   - jekyll-mentions
 
 exclude:
-  - Makefile
-  - CNAME
-  - LICENSE
-  - update.sh
-  - Gemfile
-  - Gemfile.lock
-  - requirements.txt
-  - node_modules
-  - package.json
-  - package-lock.json
-  - webpack.config.js
-  - jekyll-rtd-theme.gemspec
+  - makefile
+  - deploy.sh
+  - README.md

@@ -8,13 +8,13 @@ layout: default
 
 ## 1. Dotfiles on Makefile
 
-* [dotfiles](https://minorugh.github.io/dotfiles.html) 
+* [dotfiles](https://minorugh.github.io/dotfiles.html)
 
-## 2. Emacs Configulation
+## 2. Emacs Configuration
 
-* [init.el](https://minorugh.github.io/init.html) 
+* [init.el](https://minorugh.github.io/init.html)
 
-## 3. Neomutt Configulation
+## 3. Neomutt Configuration
 
 * [neomutt](https://minorugh.github.io/neomutt.html)
 
@@ -24,7 +24,7 @@ layout: default
 
 ## 5. Links
 
-* [snap.minorugh.com](https://snap.minorugh.com) 
-* [gospel-haiku.com](https://gospel-haiku.com) 
-* [mioru's Blog](https://blog.gospel-haiku.com/post/) 
-* [haiku & essay](https://es.gospel-haiku.com/post/) 
+* [snap.minorugh.com](https://snap.minorugh.com)
+* [gospel-haiku.com](https://gospel-haiku.com)
+* [mioru's Blog](https://blog.gospel-haiku.com/post/)
+* [haiku & essay](https://es.gospel-haiku.com/post/)
