@@ -1,3 +1,443 @@
+## 2026-03-13
+
+# Changelog 2026-03-13
+
+## 電源管理：ハイバネーション警告の調査と対処
+
+### 症状
+GNOME デスクトップ通知（右上ポップアップ）に以下の警告が頻繁に表示される。
+
+```
+GDBus.Error:org.freedesktop.login1.SleepVerNotSupported:
+Not enough swap space for hibernation
+```
+
+### 環境
+- Machine: P1 (ThinkPad)
+- OS: Debian 12
+- RAM: 30GB / Swap: 約1GB（/dev/nvme1n1p3）
+
+### 調査結果
+
+**原因の特定**
+
+`upower --dump` にて以下を確認：
+
+```
+critical-action: HybridSleep
+```
+
+UPower のバッテリー残量低下時アクションが `HybridSleep` に設定されており、
+systemd-logind がスワップ不足チェックを行って通知を出していた。
+
+**補足事項**
+
+- `/sys/power/disk` に `hibernate` エントリなし → カーネルレベルでハイバネート無効
+- バッテリー状態は正常（99%、fully-charged）
+- freerdp2-x11（リモートデスクトップ）は本件と無関係
+- `/etc/UPower/UPower.conf` の `CriticalPowerAction=Suspend` 変更は
+  UPower 0.99.20 では反映されないことを確認（設定ファイルを無視する挙動）
+
+### 対処
+
+ハイバネート関連の systemd ターゲットをマスク：
+
+```bash
+sudo systemctl mask hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+```
+
+結果：
+
+```
+Created symlink /etc/systemd/system/hibernate.target → /dev/null
+Created symlink /etc/systemd/system/hybrid-sleep.target → /dev/null
+Created symlink /etc/systemd/system/suspend-then-hibernate.target → /dev/null
+```
+
+### 後始末（要実施）
+
+```bash
+sudo rm /etc/UPower.conf
+sudo rm -rf /etc/systemd/system/upower.service.d
+sudo systemctl daemon-reload
+```
+
+### 備考
+
+- UPower 0.99.20（Debian 12）は設定ファイルより動的なカーネル応答を優先する模様
+- Debian 13 クリーンインストール時に根本的に解消予定
+
+---
+
+## Thunderbird 設定管理
+
+### 現状把握
+
+**プロファイル構成**
+
+```
+~/.thunderbird/                          # Thunderbird 参照先
+    profiles.ini / installs.ini
+    r5oy09ua.default-default/           # 実使用プロファイル
+        prefs.js                        # メイン設定ファイル
+        cert9.db / key4.db / logins.json
+        ImapMail/                       # ヘッダーキャッシュ（実体は下記）
+
+~/thunderbird/.thunderbird/             # 実体（2.6GB）
+    r5oy09ua.default-default/
+        ImapMail/                       # Gmail IMAP キャッシュ本体
+```
+
+### 対処1：prefs.js のパス修正
+
+`prefs.js` が古い Dropbox パスを参照したままになっていたため修正：
+
+```bash
+cp ~/.thunderbird/r5oy09ua.default-default/prefs.js \
+   ~/.thunderbird/r5oy09ua.default-default/prefs.js.bak
+
+sed -i 's|/home/minoru/Dropbox/thunderbird/.thunderbird|/home/minoru/thunderbird/.thunderbird|g' \
+    ~/.thunderbird/r5oy09ua.default-default/prefs.js
+
+sed -i 's|\[ProfD\]../../Dropbox/thunderbird/.thunderbird/r5oy09ua.default-default/ImapMail/imap.gmail.com|\[ProfD\]../../thunderbird/.thunderbird/r5oy09ua.default-default/ImapMail/imap.gmail.com|g' \
+    ~/.thunderbird/r5oy09ua.default-default/prefs.js
+```
+
+Thunderbird 再起動で正常動作を確認。
+
+### 対処2：設定ファイルを Dropbox/backup へ移動して symlink 展開
+
+**役割分担**
+
+```
+~/Dropbox/backup/thunderbird/    # 動くファイル（実体）
+    profiles.ini
+    installs.ini
+    prefs.js
+    cert9.db
+    key4.db
+    logins.json
+
+~/thunderbird/.thunderbird/      # キャッシュ類（バックアップ不要・Gmail から再同期）
+    r5oy09ua.default-default/
+        ImapMail/
+```
+
+**実施手順**
+
+```bash
+mkdir -p ~/Dropbox/backup/thunderbird
+PROF=~/.thunderbird/r5oy09ua.default-default
+cp ~/.thunderbird/profiles.ini ~/Dropbox/backup/thunderbird/
+cp ~/.thunderbird/installs.ini ~/Dropbox/backup/thunderbird/
+cp $PROF/prefs.js $PROF/cert9.db $PROF/key4.db $PROF/logins.json \
+   ~/Dropbox/backup/thunderbird/
+
+# symlink に置き換え
+TBIRD=~/Dropbox/backup/thunderbird
+ln -vsf $TBIRD/profiles.ini ~/.thunderbird/profiles.ini
+ln -vsf $TBIRD/installs.ini ~/.thunderbird/installs.ini
+for item in prefs.js cert9.db key4.db logins.json; do
+    ln -vsf $TBIRD/$item $PROF/$item
+done
+```
+
+Thunderbird 再起動で正常動作を確認。
+
+旧バックアップはリネームして保持：
+
+```bash
+mv ~/Dropbox/thunderbird ~/Dropbox/thunderbird.bak
+```
+
+### 対処3：Makefile の thunderbird: ターゲット更新
+
+```makefile
+thunderbird: ## Thunderbird の設定（Gmail はアプリパスワードで認証）
+# サブ機など既存インストールがある場合は事前に手動で削除すること
+# | sudo apt remove --purge thunderbird && rm -rf ~/.thunderbird
+	$(APT) $@
+	mkdir -p ${HOME}/.thunderbird/r5oy09ua.default-default
+	$(eval TBIRD := ${HOME}/Dropbox/backup/thunderbird)
+	$(eval PROF  := ${HOME}/.thunderbird/r5oy09ua.default-default)
+	ln -vsf ${TBIRD}/profiles.ini ${HOME}/.thunderbird/profiles.ini
+	ln -vsf ${TBIRD}/installs.ini ${HOME}/.thunderbird/installs.ini
+	for item in prefs.js cert9.db key4.db logins.json; do \
+		ln -vsf ${TBIRD}/$$item ${PROF}/$$item; \
+	done
+	sudo ln -vsfn ${HOME}/thunderbird/external-editor-revived /usr/local/bin
+	sudo chmod +x /usr/local/bin/external-editor-revived
+```
+
+### 設計上の決定事項
+
+- `ImapMail/`（2.6GB）の Xserver バックアップは不要と判断
+  → Gmail が正本、リストア後は Thunderbird が自動再同期する
+  → neomutt も同じ概念で運用中
+- 設定ファイルは Dropbox/backup 管理で十分
+
+---
+
+## 2026-03-12
+
+# CHANGELOG 2026-03-12
+
+## 目次
+<div class="toc">
+  - [追加した動作](#追加した動作)
+  - [結果のフォルダ構成](#結果のフォルダ構成)
+  - [備考](#備考)
+  - [GPG_README.md 新規作成](#gpg_readme.md-新規作成)
+    - [内容](#内容)
+  - [gpgimport Makefile — 作業ディレクトリ変更](#gpgimport-makefile—作業ディレクトリ変更)
+  - [mymw.pl — 新規作成・機能拡張・動作確認済み](#mymw.pl—新規作成・機能拡張・動作確認済み)
+    - [概要](#概要)
+    - [処理の流れ](#処理の流れ)
+    - [エンジン切り替え](#エンジン切り替え)
+    - [Makefile 組み込み（rule.mak の .txt.html: を置き換え）](#makefile-組み込みrule.mak-の.txt.html:を置き換え)
+    - [セパレータ行（|---|行）の記法](#セパレータ行|---|行の記法)
+    - [使用例](#使用例)
+    - [変更履歴](#変更履歴)
+  - [mymw.pl — div ブロック変換追加](#mymw.pl—div-ブロック変換追加)
+    - [追加機能](#追加機能)
+    - [判明した制約](#判明した制約)
+    - [トラブルシューティング経緯](#トラブルシューティング経緯)
+    - [更新ファイル](#更新ファイル)
+  - [mymwref.md — クイックリファレンス更新](#mymwref.md—クイックリファレンス更新)
+    - [変更内容（午前）](#変更内容午前)
+    - [変更内容（午後）](#変更内容午後)
+  - [~/Dropbox/backup/README.md — 新規作成](#~/dropbox/backup/readme.md—新規作成)
+    - [対象フォルダー](#対象フォルダー)
+    - [備考](#備考)
+  - [~/Dropbox/README.md — 新規作成](#~/dropbox/readme.md—新規作成)
+    - [内容](#内容)
+  - [~/Dropbox/makefile — 更新](#~/dropbox/makefile—更新)
+    - [変更内容](#変更内容)
+    - [cron追加](#cron追加)
+  - [~/src/github.com/minorugh/dotfiles/cron/README.md — 改訂](#~/src/github.com/minorugh/dotfiles/cron/readme.md—改訂)
+    - [変更内容](#変更内容)
+</div>
+
+
+
+
+## mkindex.pl — 月別アーカイブ機能追加
+
+### 追加した動作
+1. 当月分だけで INDEX.md を更新
+2. 先月以前の CHANGELOG-*.md があれば `archive/YYYY/MM/` に INDEX.md を生成してから移動
+3. 移動後に当月の INDEX.md を再更新
+
+### 結果のフォルダ構成
+```
+~/Dropbox/backup/changelog/
+├── INDEX.md               ← 当月分のみ
+├── mkindex.pl
+├── CHANGELOG-20260312.md
+└── archive/
+    └── 2026/
+        └── 03/
+            ├── INDEX.md
+            ├── CHANGELOG-20260304.md
+            └── ...
+```
+
+### 備考
+当月分しかないため動作未確認。来月になったら試す。
+
+---
+
+## GPG_README.md 新規作成
+
+`~/Dropbox/backup/gnupg/GPG_README.md` として設置。
+
+### 内容
+- 登場人物の整理（GPG秘密鍵・secret-all.key・git-crypt・SSH秘密鍵）
+- GPG秘密鍵と gita-crypt の関係（別物。パスフレーズ共有は運用上の選択）
+- secret-all.key のインポートが必要な理由（git-crypt unlock のため。将来のメンテ用だけではない）
+- `~/.gnupg/` を dotfiles で管理しない理由（鶏と卵になるため。現状の方針が正解）
+- GPG秘密鍵と SSH秘密鍵の違い
+- パスフレーズの管理（KeePassXC が最終バックアップ）
+
+---
+
+## gpgimport Makefile — 作業ディレクトリ変更
+
+`~/backup` → `/tmp/gpgwork` に変更。
+`/tmp` は再起動時に自動削除されるため作業後のクリーンアップが不要で安全。
+`gpg`・`export`・`delete` の3ターゲット全部に適用。
+README.md への影響なし。
+
+---
+
+## mymw.pl — 新規作成・機能拡張・動作確認済み
+
+`~/Dropbox/GH/makeweb/mymw.pl` として設置（旧名 `my:mw.pl` から改名）。
+
+### 概要
+makeweb.pl の前処理ラッパー。`-table( ... -table)` ブロックを HTML テーブルに
+変換してから makeweb エンジンに渡す。makeweb.pl 本体は無改造のまま使える。
+
+### 処理の流れ
+```
+input.txt → mymw.pl（pretable変換）→ 一時ファイル → makeweb.pl → output.html
+```
+
+### エンジン切り替え
+冒頭の1行だけ変更:
+```perl
+my $MAKEWEB_ENGINE = 'makeweb.pl';   # 標準
+my $MAKEWEB_ENGINE = 'mw4diary.pl';  # 日記用
+my $MAKEWEB_ENGINE = 'mw4ap.pl';     # AP用
+```
+mymw.pl と同じディレクトリに置けばどこでも使い回し可能。
+
+### Makefile 組み込み（rule.mak の .txt.html: を置き換え）
+```makefile
+.txt.html:
+	perl ~/Dropbox/GH/makeweb/mymw.pl $< $@
+```
+
+### セパレータ行（|---|行）の記法
+| セパレータ | 意味 |
+|---|---|
+| `\|---\|` | td、左寄せ（デフォルト。`\|--\|` や `\|----\|` も可） |
+| `\|<---\|` | td、左寄せ |
+| `\|<--->\|` | td、中央寄せ |
+| `\|--->\|` | td、右寄せ |
+| `\|---n\|` | td、左寄せ + nowrap |
+| `\|<---n\|` | td、左寄せ + nowrap |
+| `\|TH\|` | th（縦ヘッダ列）、左寄せ |
+| `\|TH<---\|` | th、左寄せ |
+| `\|TH<--->\|` | th、中央寄せ |
+| `\|TH--->\|` | th、右寄せ |
+| `\|TH---n\|` | th、左寄せ + nowrap |
+
+- `-` の数は1個以上であれば何個でも可
+- `|---|` 行の直上行が `<thead><tr>...</tr></thead>` として出力される
+- アライメントは `style="text-align:..."` で出力
+- nowrap は `style="white-space:nowrap"` で出力（アライメントと併記時は `;` で連結）
+
+### 使用例
+```
+-table(id="result"
+|作品|作者|点|選者|
+|TH<---|<---|<--->|<---|
+|春の海|みのる|7|むべ.藤井.うつぎ.|
+-table)
+```
+→ 作品列が縦ヘッダ(th)左寄せ、点列が中央寄せ、先頭行が `<thead>` で囲まれる。
+
+### 変更履歴
+- `my:makeweb.pl` → `my:mw.pl` → `mymw.pl` と改名
+- 縦ヘッダ列指定（`TH` プレフィックス）追加
+- アライメント指定（`<---` / `<--->` / `--->`）追加
+- `|---|` デフォルト左寄せ
+- セパレータ直上行を `<thead>` で囲む
+- nowrap 指定（末尾 `n`）追加、`style="white-space:nowrap"` で出力
+- `-` の数は何個でも可（`|--|` も `|------|` も同じ意味）
+- mw4diary.pl での実運転確認済み
+
+---
+
+## mymw.pl — div ブロック変換追加
+
+### 追加機能
+- `=TAG< ... =TAG>` → `<div class="TAG"> ... </div>` に変換
+  - makeweb の `=mycommand< ... =mycommand>` 書式を応用
+  - 追加属性も指定可能: `=box<id="main"` → `<div class="box" id="main">`
+  - 閉じタグは必ず `=TAG>`（`=>` は makeweb が処理するので不可）
+
+### 判明した制約
+- `-table(` および `=TAG<` は makeweb の `-( ... -)` ブロックの外に書くこと
+  - 回避策: `-)` で一度閉じてから `-table(` / `=TAG<` を書く
+- ネスト非対応（`=TAG<` の中に `-table(` は入れられない）
+- `=TAG< ... =TAG>` の閉じ忘れ対策は未解決
+  - 候補: yasnippet でペアを一括挿入、makeweb 外部定義で対処
+
+### トラブルシューティング経緯
+1. `-div(class="navi"` 書式を試みたが、makeweb が `-div` を
+   未定義コマンド（`-div_pbegin`）として解釈してエラー
+2. mw4diary.pl の HTML マップに `div_pbegin` 等を追加する案は
+   「makeweb 本体に手を加えない」方針により却下
+3. makeweb 既存の `=TAG<` 書式を mymw.pl 前処理で横取りする方式に決定
+
+### 更新ファイル
+- `~/Dropbox/GH/dia/mymw.pl`
+- `~/Dropbox/GH/makeweb/mymw.pl`
+- `~/Dropbox/GH/dia/mymwref.md`
+
+---
+
+## mymwref.md — クイックリファレンス更新
+
+`~/Dropbox/GH/makeweb/mymwref.md` を修正。
+
+### 変更内容（午前）
+- 「シンプル（全行 td、左寄せ）」セクションを2つに分割:
+  - 「シンプル（セパレータあり・全行 td、左寄せ）」— `|---|` 行あり版
+  - 「シンプル（セパレータなし・全行 td）」— セパレータ行なし版
+- セパレータなしでも全セル `td` として動作することを明示
+
+### 変更内容（午後）
+- `=TAG< ... =TAG>` 書式のセクション追加
+- makeweb の `-( ... -)` との関係・注意事項を追記
+- yasnippet div ブロック用スニペット追加（key: div）
+- 実装済み／未実装コマンド一覧を整理
+
+---
+
+## ~/Dropbox/backup/README.md — 新規作成
+
+`~/Dropbox/backup/` 配下の全サブフォルダーの用途・構成をまとめたREADMEを新規作成。
+
+### 対象フォルダー
+CHANGELOG, GH, config, deepl, emacs, filezilla, gist, gnupg, icons, keyrings, mozc, passwd, ssh, zsh の14フォルダー。
+
+### 備考
+- `GH/` は Dropbox上のまるごとコピーを廃止。Xserver側でインクリメンタル圧縮バックアップしているため冗長だった
+- `keyrings/` は X250がシンボリックリンクではなく起動時コピー運用である旨を明記（GNOME Keyring競合回避）
+
+---
+
+## ~/Dropbox/README.md — 新規作成
+
+Dropboxルートの設計概要をまとめたREADMEを新規作成。
+
+### 内容
+- cron自動化の全体像（myjob.sh・makefile の2本）
+- makefile の各ターゲット一覧
+- 全サブフォルダーの用途説明（GH, minorugh.com, backup, howm, Documents, Site, thunderbird, junk, Public, papa）
+
+---
+
+## ~/Dropbox/makefile — 更新
+
+### 変更内容
+- ターゲット名を大文字に統一（`MELPA` / `DOTFILES` / `GH` / `GIT-COMMIT`）
+- `GH` を `all` に組み込み（毎夜自動実行）
+- 各ターゲットにコメント補足を追加
+- cronの設定例をファイル冒頭に記載
+- 長いrsyncコマンドを `\` で折り返して可読性改善
+
+### cron追加
+```crontab
+50 23 * * * make -f /home/minoru/Dropbox/makefile >> /tmp/myjob.log 2>&1
+```
+
+---
+
+## ~/src/github.com/minorugh/dotfiles/cron/README.md — 改訂
+
+「作業記録」スタイルから「設定リファレンス」スタイルに改訂。
+
+### 変更内容
+- 現在のcrontab全体を冒頭に一覧化
+- makefileのcronジョブ（23:50）を3本目として追加
+- トラブルシューティング記録は末尾に保持
+
+---
+
 ## 2026-03-11
 
 # CHANGELOG 2026-03-11
