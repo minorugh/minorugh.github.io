@@ -5,7 +5,7 @@ git:
 	git add . && git diff --cached --exit-code --quiet && echo "\nnothing to commit, working tree clean!" || \
 	git commit -a -m "Updated: `date +'%Y-%m-%d %H:%M:%S'`" && \
 	git push origin main
-	google-chrome https://github.com/minorugh/minorugh.github.io/blob/main/CHANGELOG.md 2>/dev/null &
+	google-chrome https://github.com/minorugh/minorugh.github.io/blob/main/CHANGELOG.md
 
 changelog:
 	@DATE=$$(date '+%Y-%m-%d'); \
