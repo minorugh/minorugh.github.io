@@ -14,3 +14,17 @@ changelog:
 	mv $$TMPFILE CHANGELOG.md; \
 	emacsclient CHANGELOG.md
 
+log:
+	git log --oneline -20
+
+cat:
+	cat CHANGELOG.md
+
+view:
+	google-chrome https://github.com/minorugh/minorugh.github.io/blob/main/CHANGELOG.md
+
+commits:
+	google-chrome https://github.com/minorugh/minorugh.github.io/commits/main
+
+actions:
+	google-chrome https://github.com/minorugh/minorugh.github.io/actions
