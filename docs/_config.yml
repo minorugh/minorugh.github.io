@@ -16,16 +16,16 @@ exclude:
   - makefile
   - deploy.sh
   # - README.md
-  - Makefile
-  - CNAME
-  - LICENSE
-  - update.sh
-  - Gemfile
-  - Gemfile.lock
-  - requirements.txt
-  - node_modules
-  - package.json
-  - package-lock.json
-  - webpack.config.js
+  # - Makefile
+  # - CNAME
+  # - LICENSE
+  # - update.sh
+  # - Gemfile
+  # - Gemfile.lock
+  # - requirements.txt
+  # - node_modules
+  # - package.json
+  # - package-lock.json
+  # - webpack.config.js
   - jekyll-rtd-theme.gemspec
 
