@@ -1,3 +1,815 @@
+## 2026-03-25
+
+# 2026-03-25
+
+### Removed
+- `deploy.sh` — makefile に統合済みのため削除
+
+### Changed
+- `_config.yml` — `remote_theme` を URL 形式から `user/repo` 形式に修正
+- `_config.yml` — `exclude` リストを実在するファイルのみに整理
+- `docs/makefile` — `deploy.sh` 依存を解消、ターゲット名を `git` に統一
+- `docs/README.md` — タイポ修正 (Configulation → Configuration)
+- `README.md` — リポジトリ構成と deploy 手順を追記
+- `makefile` — `changelog`/`log`/`cat`/`commits`/`actions` ターゲットを追加
+
+### Fixed
+- `docs/_includes/extra/head.html` — テーマが自動生成する HTML の重複を解消（空ファイルに）
+
+### Added
+- `CHANGELOG.md` — 新規作成、追記運用開始
+- `github-deploy` — Emacs 関数、changelog-YYYYMMDD.md から CHANGELOG.md に自動追記
+
+---
+
+## 2026-03-24
+
+# 2026-03-24
+
+## dotfiles/devils/ README 作成
+
+### 内容
+
+ログイン時の Emacs 自動起動・常駐化の仕組みを `dotfiles/devils/README.md` としてまとめた。
+3つの要素で構成している：
+
+1. **devilspie + devils_startup.sh** — ログイン時に自動起動＆最小化
+2. **Emacs server** — init.el で server-start、emacsclient からフレームを開ける
+3. **handle-delete-frame 上書き** — 最後の1フレームを閉じても終了させない
+
+### handle-delete-frame について
+
+`delete-frame-functions` フックを使う方法も試みたが、
+✕ボタン経由のフレーム削除を止められなかったため元の実装を継続採用。
+`frame.el` の組み込み関数上書きはリスクがあるとされるが、
+長期間問題なく動作しており実績ある実装として維持する。
+
+### 対象ファイル
+
+- `dotfiles/devils/README.md` — 新規作成
+
+---
+
+## my:dired.el / my:template.el リファクタリング
+
+### 背景
+
+- `my:dired.el` は load-path を通すだけで `require` していなかった
+- `my:template.el` は 00-base.el に autoload を書き連ねていたが、ロード時間への寄与はほぼゼロで、メンテナンスコストの方が大きかった
+- 両ファイルとも「hydra から呼ばれるプライベートな設定を別ファイルに分離する」という設計意図があるため、ファイル分離は維持する方針とした
+
+### 変更内容
+
+#### my:dired.el
+
+- `leaf my:dired` ブロックを廃止し、トップレベルの `defun` 群に整理
+- `:defun` 宣言を `declare-function` に置き換え（flycheck 警告対策）
+- `my:w_kukai` の重複定義を削除（2番目の定義を残す）
+
+#### my:template.el
+
+- `leaf *my:template` ブロックを廃止し、トップレベルの `defun` 群に整理
+- `:defun` 宣言を `declare-function` に置き換え
+- `*` プレフィックスと `(provide 'my:template)` の矛盾を解消
+- `setq string` を `let` に修正（グローバル変数汚染の防止）・3箇所
+- `my:minoru_sen` を呼び出し元より前に移動（定義順の整合）
+
+#### 40-hydra-dired.el
+
+- `:require my:dired` を追加
+
+#### 40-hydra-menu.el
+
+- `:require my:template` を追加
+
+#### 00-base.el
+
+- `my:template` 関係の autoload 宣言を削除
+
+### leaf での :require 書式
+
+```elisp
+(leaf *hydra-dired
+  :require my:dired
+  ...)
+
+(leaf *hydra-work
+  :require my:template
+  ...)
+```
+
+leaf 展開時に `(require 'my:dired)` / `(require 'my:template)` が実行される。
+
+---
+
+## Docker httpd: Tailscale 経由スマホ確認用ポート追加
+
+### 背景と問題
+
+ローカルネットワーク内では `gh.local:8080` / `minorugh.local:8080` というホスト名で
+2つのサイトを切り替えてアクセスできていた。これは Apache のバーチャルホスト機能で
+ブラウザが送る `Host:` ヘッダーを見てサイトを振り分けている仕組み。
+
+Tailscale 経由で出先のスマホからアクセスする場合、`.local` ドメインは
+mDNS（ローカルネットワーク内だけの名前解決）なので使えず、
+IP アドレス直打ち（`http://100.x.x.x:8080/`）しか手段がない。
+
+ところが IP 直打ちでは `Host:` ヘッダーが `100.x.x.x` になるため
+バーチャルホストの振り分けが機能せず、`vhosts.conf` の先頭に書かれたサイトしか
+表示できなかった。つまり2サイトの切り替えが不可能だった。
+
+### 解決策
+
+ポート番号でサイトを振り分ける方式を採用。Apache に8081番ポートも Listen させ、
+ポートごとに表示するサイトを固定することで IP 直打ちでも切り替えを可能にした。
+
+### 変更ファイルと内容
+
+#### httpd.conf
+
+```
+Listen 80
+Listen 8081   ← 追加
+```
+
+#### vhosts.conf
+
+```apache
+# ポート80（既存）: ホスト名で振り分け。先頭を gh.local に変更
+# → IP直打ちのデフォルトが gospel-haiku.com になる
+<VirtualHost *:80>
+    ServerName gh.local
+    DocumentRoot /var/www/html/gospel-haiku.com/public_html
+    ...
+</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName minorugh.local
+    DocumentRoot /var/www/html/minorugh.com/public_html
+    ...
+</VirtualHost>
+
+# ポート8081（新規追加）: minorugh.com 専用
+<VirtualHost *:8081>
+    ServerName minorugh.local
+    DocumentRoot /var/www/html/minorugh.com/public_html
+    ...
+</VirtualHost>
+```
+
+#### docker-compose.yml
+
+```yaml
+ports:
+  - "8080:80"
+  - "8081:8081"   ← 追加
+```
+
+### アクセス方法
+
+| URL | サイト | 用途 |
+|---|---|---|
+| `http://gh.local:8080/` | gospel-haiku.com | ローカル（従来通り） |
+| `http://minorugh.local:8080/` | minorugh.com | ローカル（従来通り） |
+| `http://100.x.x.x:8080/` | gospel-haiku.com | Tailscale経由スマホ確認 |
+| `http://100.x.x.x:8081/` | minorugh.com | Tailscale経由スマホ確認 |
+
+### 操作手順
+
+```bash
+cd ~/src/github.com/minorugh/dotfiles/docker/httpd
+docker compose down
+docker compose up -d
+docker ps   # 両ポートが表示されれば OK
+```
+
+---
+
+## 2026-03-23
+
+# CHANGELOG-20260323
+
+## howm-fix-code-comments.pl — トグル機能追加
+
+コードブロック内の `#` 変換ロジックを拡張した。
+
+- `# foo` → `## foo`（howm list 除外）
+- `## foo` → `# foo`（削減）
+- `### foo` → `## foo`（削減）
+
+キーバインド `C-c #` で呼び出せるようにして快適な運用を実現。
+
+## deepl-translate.el — provide 追加・警告修正
+
+- `(provide 'deepl-translate)` が抜けていたため leaf ブロックで
+  `failed to provide feature 'deepl-translate'` エラーが発生していた。
+  ファイル末尾に追加して解消。
+- `;;; lexical-binding` 追加により bytecomp warning を解消。
+- `flycheck-disabled-checkers: (emacs-lisp-checkdoc)` を Local Variables
+  ブロックに追加して checkdoc info を抑制。
+
+## inits/ 全ファイル — `:custom-face` → `custom-set-faces` 統一
+
+auto-compile 後に `:custom-face` キーワードが定数リストを変更しようとして
+エラーになる問題を解消するため、以下4ファイルの `:custom-face` ブロックを
+`:config` 内の `custom-set-faces` 呼び出しに書き換えた。
+
+- `02-git.el` — `diff-hl-change/delete/insert`
+- `07-highlight.el` — `goggles-added/changed/removed`、`show-paren-match`
+- `30-ui.el` — `region`、`hl-line`
+- `60-markdown.el` — `markdown-code-face`、`markdown-pre-face`
+
+## 60-howm.el — `:defun` 宣言漏れ修正
+
+`my:howm-fix-after-super-save` が `:defun` に未記載だったため、
+bytecomp が「関数が定義されていない」と警告を出していた。
+`:defun` リストに追加して解消。
+
+## compile-log クリーン確認
+
+全 29 ファイルの auto-compile が警告ゼロで完了することを確認した。
+`Compiling internal form(s)` はステータスメッセージであり警告ではない。
+
+## cron スクリプト刷新 — ログ形式を1ジョブ1ブロックに整理
+
+### automerge.sh
+
+各Stepの結果を個別に出力する形式に書き直した。
+重複出力バグ（末尾で `echo` と `>> /tmp/cron.log` を二重に書いていた）も同時に修正。
+
+```
+[automerge] START: 2026-03-23 23:40:01
+[automerge] Step1 rsync dmember: OK
+...
+[automerge] END: 2026-03-23 23:40:08 (OK)
+```
+
+### autobackup.sh
+
+`make -f makefile` を一括実行していた従来方式を廃止。
+各ターゲット（melpa/git-push/mattermost/mozc）を個別に呼び出し、
+結果をそれぞれログに出力する方式に変更。
+
+```
+[autobackup] START: 2026-03-23 23:50:01
+[autobackup] melpa: OK
+[autobackup] git-push (GH+minorugh.com): OK
+[autobackup] mattermost: OK
+[autobackup] mozc: OK
+[autobackup] END: 2026-03-23 23:50:20 (OK)
+```
+
+試運転で全ステップ正常動作を確認。automerge 3秒、autobackup 11秒。
+
+### README 更新
+
+以下2ファイルの cron 関連記述を現状に合わせて修正。
+
+- `~/Dropbox/README.md` — `myjob.sh` → `automerge.sh`、ログパス `/tmp/myjob.log` → `/tmp/cron.log` に修正
+- `~/dotfiles/cron/README.md` — ログ形式サンプルを新フォーマットに更新
+
+---
+
+## 60-markdown.el — my:howm-fix-code-comments リージョン対応
+
+`C-c #` 一本でファイル全体処理とリージョン処理を自動判別する方式に拡張。
+
+### 動作仕様
+
+- リージョンなし → 従来通り Perl スクリプトでファイル全体を処理
+- リージョンあり + コードブロック内 → Elisp でリージョン内の行のみトグル処理
+- リージョンあり + コードブロック外 → "not in code block" メッセージを表示
+
+### トグルロジック（リージョン処理時）
+
+- `# foo` → `## foo`
+- `## foo` → `# foo`
+- `### foo` → `## foo`
+
+### 実装ポイント
+
+- `my:howm-fix--in-code-block-p` ヘルパー関数を追加
+  カーソル位置より前の ` ``` ` の出現回数が奇数なら「コードブロック内」と判定
+- `copy-marker` で `end` を固定し、バッファ編集中の位置ずれを防止
+- ` ``` ` 行をリージョンに含めなくても正しく動作する
+
+### 動作確認済み
+
+---
+
+## migemo 関連設定を全面修正
+
+### howm migemo 復活 (60-howm.el)
+
+Emacs 30.1 移行後に howm の migemo 検索が動かなくなっていた原因を特定。
+`howm-migemo-command` は howm が参照しない変数で、正しい設定変数は
+`howm-migemo-client` だった。
+
+**修正内容：**
+
+```elisp
+;; 誤（howm が参照しない変数）
+(setq howm-migemo-command "/usr/bin/cmigemo")
+
+;; 正
+(setq howm-migemo-client '((type . cmigemo) (command . "/usr/bin/cmigemo")))
+(setq howm-migemo-client-option '("-q" "-d" "/usr/share/cmigemo/utf-8/migemo-dict"))
+```
+
+### migemo leaf ブロック整理 (04-counsel.el)
+
+`with-eval-after-load 'isearch` による暫定設定を廃止し、
+leaf ブロックに統一。
+
+```elisp
+(leaf migemo :ensure t
+  :doc "Japanese incremental search through dynamic pattern expansion."
+  :hook (after-init-hook . migemo-init)
+  :config
+  (setq migemo-command "/usr/bin/cmigemo")
+  (setq migemo-options '("-q" "--emacs"))
+  (setq migemo-dictionary "/usr/share/cmigemo/utf-8/migemo-dict")
+  (setq migemo-user-dictionary nil)
+  (setq migemo-regex-dictionary nil)
+  (setq migemo-coding-system 'utf-8-unix))
+```
+
+### swiper-migemo 復活 (04-counsel.el)
+
+`dash.el` のアナフォリックマクロ（`--map`、`--partition-by`、`it`）が
+`lexical-binding: t` 環境で動作しないため、素の Elisp で書き直した。
+`:vc` leaf キーワードも廃止し `with-eval-after-load 'swiper` にインライン化。
+
+### 動作確認済み。
+
+---
+
+## md2pdf / md2docx xdg-open 修正
+
+### 問題
+pandoc変換後に `xdg-open` が機能しない（ファイルは生成される、エラーも出ない）。
+
+### 原因
+`start-process-shell-command` はシェル経由実行のため、Emacsの環境変数
+（`DISPLAY`、`DBUS_SESSION_BUS_ADDRESS` など）が引き継がれないケースがある。
+
+### 修正
+`start-process-shell-command "xdg-open" ...` を `call-process "xdg-open"` に変更。
+ファイルパスを引数として直接渡すことで解決。
+
+---
+
+## howm-fix-code-comments リファクタリング
+
+### 背景
+トグル機能を持つ複雑な実装から、実用上必要な機能に絞ったシンプル版に整理。
+
+### 変更内容
+
+**elisp側 (`~/.emacs.d/inits/` 該当ファイル)**
+- `my:howm-fix--in-code-block-p` 関数を削除
+- リージョン処理のコードブロック内限定チェックを廃止（バッファ内どこでも動作）
+- トグル処理（`## `→`# `、`### `→`## `）を削除
+- `# ` → `## ` の一方向変換のみに簡略化
+
+**Perl側 (`~/.emacs.d/elisp/howm-fix-code-comments.pl`)**
+- `## `→`# ` と `### `→`## ` のトグルパターンをコメントアウトで残す
+- `# ` → `## ` の一方向変換のみ有効化
+
+### 設計方針
+- ファイル全体処理はPerlで一発処理
+- 取りこぼし修正はリージョン選択で手軽に対応
+- トグルは不要と判断。Perl側はコメントアウトで将来の可能性を残す
+
+---
+
+## 追加作業ログ（2026-03-23）
+
+### STEP 1：P1 蓋閉めスリープ無効
+
+`/etc/systemd/logind.conf` を確認。以下の2行がコメントなしで有効済みだった：
+
+```
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+```
+
+```bash
+sudo systemctl restart systemd-logind
+```
+
+### STEP 2：P1 Tailscale インストール
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up  # Google アカウントで認証
+sudo systemctl enable --now tailscaled
+tailscale ip -4    # → 100.96.55.61
+```
+
+### STEP 3：X250 Tailscale インストール
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up  # 同じ Google アカウントで認証
+sudo systemctl enable --now tailscaled
+tailscale ip -4    # → 100.119.220.1
+```
+
+### STEP 4：X250 Mattermost デスクトップアプリ
+
+公式から直接 .deb を取得してインストール：
+
+```bash
+wget https://releases.mattermost.com/desktop/6.1.0/mattermost-desktop_6.1.0-1_amd64.deb
+sudo dpkg -i mattermost-desktop_6.1.0-1_amd64.deb
+```
+
+ブラウザで `http://100.96.55.61:8065` → "View Desktop App" からアプリに誘導、ログイン成功。
+
+### STEP 5：Pixel 8 Tailscale 設定
+
+Mattermost アプリは導入済み。Google Play で Tailscale をインストールし、同じ Google アカウントでログイン。サーバー URL を `http://100.96.55.61:8065` に変更してログイン成功。
+
+### 完了
+
+- [x] P1 蓋閉めスリープ無効
+- [x] P1 Tailscale インストール・設定（100.96.55.61）
+- [x] X250 Tailscale インストール・設定（100.119.220.1）
+- [x] X250 Mattermost デスクトップアプリ導入・ログイン確認
+- [x] Pixel 8 Tailscale インストール・ログイン確認
+ilscale
+
+---
+
+## 2026-03-22
+
+# CHANGELOG-20260322
+
+## Mattermost Docker環境 再構築・移行作業
+
+### 背景
+- 当初はDropbox共有によるサブ機との共同運用を想定して構築
+- 安定しないためメイン機（P1）単独運用に方針変換
+- 過去に複数セッションでymlを書き直した結果、Dropboxパス・GitLab残骸等が混入
+- 本日、完全クリーン再構築を実施
+
+---
+
+### 午前の作業（事前準備）
+
+- 不要な匿名ボリューム92個を `docker volume prune` で削除（1.919GB解放）
+- DBバックアップ取得: `~/mattermost_backup.sql`（324KB、09:15）
+- GitLabコンテナ（誤混入）を削除
+
+---
+
+### 午後の作業
+
+#### Phase 1 — docker-compose.yml再構築
+
+**問題点の確認:**
+- 全ボリュームが `~/Dropbox/backup/mattermost/` を直接マウントしていた
+- `data`, `logs`, `config`, `plugins`, `db` の全5ディレクトリがDropboxパス
+- 旧方針（Dropbox共有運用）のまま完全に残存
+
+**実施内容:**
+- `~/Docker/mattermost/{db,data,config,logs,plugins}` を新規作成
+- `~/Docker/README.md` を作成（誤削除防止）
+- `docker-compose.yml` を新規作成（全ボリュームを `/home/minoru/Docker/mattermost/` 配下に変更）
+- 匿名ボリューム2個（旧データ）を削除
+- `sudo chown -R 2000:2000 /home/minoru/Docker/mattermost` でパーミッション設定
+- クリーン状態でコンテナ起動・動作確認（セットアップ画面表示を確認）
+
+**DBリストア:**
+- `docker stop mattermost` でMattermostのみ停止（postgresは維持）
+- DROP DATABASE → CREATE DATABASE でDB初期化
+- `~/mattermost_backup.sql` から `\restrict` 行を除去してリストア
+- `docker start mattermost` で再起動
+- ログイン確認済み、ユーザー数4件（システム2＋作成済み2）
+
+#### Phase 2 — バックアップスクリプト見直し
+
+**旧 `mattermost-backup.sh` の問題点:**
+- バックアップ先がDropboxパス直指定（継続）
+- `config` と `data` を tar.gz で7世代管理
+- `sudo tar` が必要でchown処理が必要だった
+
+**新 `mattermost-backup.sh` の仕様:**
+- `data/`, `config/`, `logs/`, `plugins/` を rsync で上書き同期
+- DBは `pg_dump` で `mattermost.sql` に上書き保存（世代管理なし）
+- バックアップ先: `~/Dropbox/backup/mattermost/`（Dropboxがバージョン管理）
+- `BACKUP_DIR` を `/home/minoru/Dropbox/...` に固定（sudo実行時の$HOME問題を回避）
+- 動作確認済み
+
+**Dropbox側の旧データ整理:**
+- `db/` ディレクトリ削除（新方針では不要）
+- `20260321.tar.gz` 削除
+- `mattermost_20260321.sql` 削除
+
+#### Phase 3 — Makefile類の修正
+
+**dotfiles/docker/Makefile:**
+- `mattermost` ターゲットの `chown` パスを Dropbox → `/home/minoru/Docker/mattermost` に変更
+- `mattermost-backup` ターゲットをシンプル化（`mattermost-backup.sh` を呼ぶだけ）
+
+**dotfiles/Makefile:**
+- `docker-setup` ターゲットを新方針に対応
+  - ディレクトリ作成 + Dropboxからrsyncでデータ復元
+- `mattermost-restore-db` ターゲットを新規追加
+  - DBをDropboxの `mattermost.sql` からリストア
+
+**新規リストア手順（3ステップ）:**
+```
+Step 1: make docker-setup          # ディレクトリ作成＋rsyncでデータ復元
+Step 2: make mattermost            # コンテナ起動
+Step 3: make mattermost-restore-db # DBリストア
+```
+
+**dotfiles/README.md:**
+- ターゲット一覧を新方針に合わせて更新（Step1〜3を明記）
+- 更新履歴に本日分を追記
+
+---
+
+### 最終確認
+
+```
+mattermost       healthy  0.0.0.0:8065->8065/tcp
+mattermost-postgres  healthy  5432/tcp
+gitea            Up       0.0.0.0:3000->3000/tcp
+httpd            Up       0.0.0.0:8080->80/tcp
+```
+
+- `~/Docker/mattermost/` — ローカルデータ正常
+- `~/Dropbox/backup/mattermost/` — rsyncバックアップ済み
+- ログイン確認済み
+
+---
+
+## UPower 蓋閉じ警告の調査と修正
+
+### 症状
+
+ノートの蓋を閉じると GNOME/Xfce の通知領域に以下の警告が出る：
+
+```
+電源管理
+GDBus.Error:org.freedesktop.DBus.Error.AccessDenied: Permission denied
+```
+
+### 原因調査
+
+`dbus-monitor` で蓋閉じ時の DBus シグナルを監視：
+
+```bash
+dbus-monitor --system 2>&1 | grep -i "upower\|power\|denied\|lid" &
+```
+
+蓋閉じ時に以下のシグナルを確認：
+
+```
+path=/org/freedesktop/UPower
+interface=org.freedesktop.DBus.Properties
+member=PropertiesChanged
+  string "LidIsClosed"
+  variant "Device cannot be used while the lid is closed"
+```
+
+### 原因
+
+UPower が蓋閉じ＝デバイス使用不可と判定している。  
+外部モニターでクラムシェル運用しているにもかかわらず、UPower がそれを考慮せず  
+Xfce パワーマネージャーに `AccessDenied` を返していた。
+
+以前修正した `brightness-switch` 問題（`xfconf-query` で値を 0 に設定）と同系統。
+
+### 修正手順
+
+#### 1. UPower 設定ファイルを編集
+
+```bash
+sudo nano /etc/UPower/UPower.conf
+```
+
+以下の行を変更：
+
+```
+# 変更前
+IgnoreLid=false
+
+# 変更後
+IgnoreLid=true
+```
+
+#### 2. UPower を再起動
+
+```bash
+sudo systemctl restart upower
+```
+
+#### 3. 動作確認
+
+蓋を閉じて警告が出ないことを確認する。
+
+### 追記：UPower の IgnoreLid=true では解決せず
+
+`/etc/UPower/UPower.conf` の `IgnoreLid=true` ＋ `sudo systemctl restart upower` を試みたが警告は継続。
+
+真の原因は **Xfce パワーマネージャーが自分で蓋閉じを処理しようとして DBus の権限エラーになっていた**こと。
+
+#### 実際の修正コマンド
+
+```bash
+xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lid-action-on-ac -s 0
+xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lid-action-on-battery -s 0
+```
+
+変更前の値：
+- `lid-action-on-ac` : 2
+- `lid-action-on-battery` : 1
+
+変更後の値：
+- `lid-action-on-ac` : 0（AC接続時＝自宅クラムシェル運用で何もしない）
+- `lid-action-on-battery` : 0（一時的）→ その後 1 に戻す
+
+#### 最終設定値
+
+外出時バッテリー駆動で蓋閉じサスペンドが必要なため `lid-action-on-battery` を 1 に戻した：
+
+```bash
+xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/lid-action-on-battery -s 1
+```
+
+| キー | 値 | 意味 |
+|---|---|---|
+| `lid-action-on-ac` | 0 | AC接続時：何もしない（自宅クラムシェル） |
+| `lid-action-on-battery` | 1 | バッテリー時：サスペンド（外出時） |
+
+### 状態
+
+- [x] 原因特定
+- [x] 修正適用
+- [x] 動作確認（警告消滅を確認）
+
+---
+*2026-03-22 解決*
+
+---
+
+## 2026-03-21
+
+# CHANGELOG-20260321
+
+## Thunderbird: ExtEditorR アドオン修復 ✅
+
+- **原因:** Debian 12 の GLIBC 2.36 では v1.2.0 バイナリが動かない（GLIBC 2.39 必要）
+- **対処:**
+  - バイナリは v1.1.0 のまま（`~/Dropbox/backup/thunderbird/addons/external-editor-revived`）
+  - xpi（拡張機能）は v1.2.0 のまま
+  - アドオン設定の **Bypass version check** にチェックを入れて Apply
+- **備考:** Debian 13（GLIBC 2.40）に上げれば v1.2.0 バイナリも動くようになる
+
+---
+
+## Thunderbird: アドレス帳復元 ✅
+
+- **原因:** Thunderbird 設定整理の過程で `abook.sqlite` の中身が空になった
+  - スキーマ（`list_cards` / `lists` / `properties`）は残っていたがデータが0件
+- **復元手順:**
+  1. ゴミ箱に複数の `abook.sqlite` が存在することを確認
+     ```bash
+     find ~/.local/share/Trash -name "abook*" 2>/dev/null
+     ```
+  2. `Mail` ディレクトリ由来のファイルに 131KB の WAL が残っていた（3月11日付け）
+  3. WAL をマージして 381件のデータを確認・復元
+     ```bash
+     cp ~/.local/share/Trash/files/Mail/.thunderbird/r5oy09ua.default-default/abook.sqlite /tmp/abook_recovery.sqlite
+     cp ~/.local/share/Trash/files/Mail/.thunderbird/r5oy09ua.default-default/abook.sqlite-wal /tmp/abook_recovery.sqlite-wal
+     sqlite3 /tmp/abook_recovery.sqlite "PRAGMA wal_checkpoint(FULL);"
+     sqlite3 /tmp/abook_recovery.sqlite "SELECT COUNT(*) FROM properties;"  # → 381
+     cp ~/.thunderbird/r5oy09ua.default-default/abook.sqlite ~/.thunderbird/r5oy09ua.default-default/abook.sqlite.bak
+     cp /tmp/abook_recovery.sqlite ~/.thunderbird/r5oy09ua.default-default/abook.sqlite
+     ```
+- **備考:** 復元データは3月11日時点のもの。それ以降に追加した連絡先は失われている可能性あり
+- **備考:** 現行Thunderbirdのアドレス帳スキーマは `cards` ではなく `list_cards` / `lists` / `properties` を使用。古いコマンド（`SELECT COUNT(*) FROM cards;`）はエラーになるので注意
+
+---
+
+## mozc: バックアップ方式変更に伴う rsync 統一 ✅
+
+P1 の `~/.mozc` 管理を Dropbox シンボリックリンクから実ディレクトリ＋毎晩バックアップ方式に変更したことに伴い、mozc リストア処理を `cp -rf` から `rsync` に統一。
+
+**`~/.autostart.sh`（X250 起動時のリストア処理）**
+```bash
+# 変更後
+rsync -av --delete ~/Dropbox/backup/mozc/.mozc/ ~/.mozc/
+```
+
+**`~/Dropbox/makefile`（`emacs-mozc` ターゲット）**
+```makefile
+# 変更後
+rsync -av --delete ~/Dropbox/backup/mozc/.mozc/ ~/.mozc/
+```
+
+---
+
+## Docker: 全データを ~/Dropbox/backup/ に統一移行 ✅
+
+### 移行内容
+- `~/docker-data/mattermost/` → `~/Dropbox/backup/mattermost/`
+- `~/Dropbox/docker-data/gitea/` → `~/Dropbox/backup/gitea/`
+- `~/docker-data/` および `~/Dropbox/docker-data/` を廃止
+
+### データ構成（移行後）
+```
+~/Dropbox/backup/mattermost/
+  config/   # コンテナマウント
+  data/     # コンテナマウント
+  logs/     # コンテナマウント
+  plugins/  # コンテナマウント
+  db/       # postgres データ
+  *.tar.gz  # config+data バックアップ（7世代）
+  *.sql     # pg_dump バックアップ（7世代）
+
+~/Dropbox/backup/gitea/
+  git/
+  gitea/
+  ssh/
+```
+
+### トラブルと解決
+- **Gitea が初期化** → `sudo rm -rf ~/Dropbox/docker-data` 実行後に発覚。Dropbox のバージョン履歴から復元成功
+- **Mattermost が初期画面** → DBが初期化されていた。`mattermost_20260321.sql` からリストアして復元成功
+
+### Mattermost リストア手順（重要）
+> ⚠️ Mattermost が起動した状態でリストアするとテーブルが重複してデータが復元されない。
+> 必ず postgres だけ起動した状態でリストアすること。
+
+```bash
+cd ~/src/github.com/minorugh/dotfiles/docker/mattermost
+docker compose stop mattermost
+docker compose stop postgres
+sudo rm -rf ~/Dropbox/backup/mattermost/db
+docker compose up -d postgres
+sleep 10
+docker exec -i mattermost-postgres psql -U mattermost mattermost \
+  < ~/Dropbox/backup/mattermost/mattermost_YYYYMMDD.sql
+docker compose up -d mattermost
+```
+
+---
+
+## README 各種更新 ✅
+
+| ファイル | 内容 |
+|---|---|
+| `dotfiles/README.md` | ターゲット一覧を実態に合わせて更新、cron セクション追加 |
+| `~/Dropbox/README.md` | makefile ターゲットを git-push 方式に更新 |
+| `dotfiles/docker/README.md` | データパスを backup/ に統一、リストア手順を加筆 |
+| `dotfiles/cron/README.md` | autobackup の内容・スクリプト名を実態に合わせて修正 |
+| `~/Dropbox/passwd/README.md` | mergepasswd.pl のパス修正、保持期間統一 |
+
+
+## Docker Mattermost 起動失敗問題の修正
+
+### 症状
+PC再起動時に `mattermost` コンテナが `Restarting (1)` 状態になり、
+ブラウザで `localhost:8065` に接続できない（ERR_CONNECTION_REFUSED）。
+`docker down → up` で復旧することもあるが不安定。
+
+### 原因
+PostgreSQL が完全に起動する前に Mattermost が DB 接続を試みてクラッシュループに入る。
+`depends_on: condition: service_healthy` だけでは不十分で、
+`pg_isready` が応答しても実際の接続受付までにタイムラグがある。
+
+### 修正内容（docker-compose.yml）
+
+**postgres サービス:**
+- `healthcheck.test` を `pg_isready -U mattermost -d mattermost` に強化（DB名も指定）
+- `healthcheck.interval` を `5s → 10s` に変更
+- `healthcheck.retries` を `5 → 10` に増加
+- `healthcheck.start_period: 30s` を追加（起動直後の猶予時間）
+- `restart: always → unless-stopped` に変更
+
+**mattermost サービス:**
+- DSN に `connect_timeout=10` を追加
+- `restart: always → unless-stopped` に変更
+
+今日の修正まとめ：
+
+原因: ~/Dropbox/backup/mattermost/config/config.json が 644 でコンテナから書き込み不可
+修正: chmod 664 config.json
+healthcheckやDB待機は関係なかった
+
+
+### 未解決課題
+`~/Dropbox/backup/mattermost/db` を Dropbox 同期対象から外すことを推奨。
+PostgreSQL のデータファイルを Dropbox で同期すると DB 破損リスクがある。
+`~/.local/share/mattermost/db` などローカルパスへの移行を検討すること。
+
+---
+
 ## 2026-03-19
 
 # CHANGELOG-20260319
