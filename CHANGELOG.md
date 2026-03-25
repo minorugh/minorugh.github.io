@@ -1,3 +1,512 @@
+## 2026-03-19
+
+# CHANGELOG-20260319
+
+## Mattermost Docker セットアップ完了
+
+### DBバックアップ設定
+- `dotfiles/cron/mattermost-backup.sh` 新規作成
+  - pg_dump → `~/Dropbox/docker-data/mattermost/backup/` に保存
+  - 7日以上古いファイルは自動削除、backup.log に成否記録
+  - コンテナ未起動時は空ファイル生成を防ぐ起動確認処理を追加
+  - crontab 側 `>> /tmp/cron.log 2>&1` でログ統一（automerge・autobackup と同仕様）
+- `dotfiles/Makefile` の `autobackup` ターゲットに `mattermost-backup.sh` のシンボリックリンク追加
+- `dotfiles/cron/crontab` に毎日午前3時のエントリ追加
+- `docker/Makefile` に `mattermost-backup` ターゲット追加（手動実行・ログ末尾表示）
+- 動作確認済み：mattermost_20260319_104505.sql (171KB) 生成
+
+### automerge.sh ログ統一
+- `/tmp/automerge.log` への出力を廃止、`/tmp/cron.log` に統一
+- crontab の automerge 行はすでに `>> /tmp/cron.log 2>&1` だったので変更なし
+- スクリプト内の `>> $LOGFILE` を `echo` に変更（crontab リダイレクトに任せる）
+
+### 不具合修正：コンテナ unhealthy 問題
+- 原因：`~/Dropbox/docker-data/mattermost/data/` のオーナーが `minoru` のまま
+  - `permission denied: open data/testfile` でヘルスチェック失敗
+- 対処：`sudo chown -R 2000:2000 .../data` で解決
+- 再発防止：`docker/Makefile` の `mattermost` ターゲットに `db/` の chown も追加
+  ```makefile
+  sudo chown -R 2000:2000 ~/Dropbox/docker-data/mattermost
+  sudo chown -R 2000:2000 ~/.local/share/mattermost/db
+  ```
+
+### スマホアクセス確認
+- 運用方針：P1 単機運用、自宅WiFi内のみ（v6プラスのためポート開放不可）
+- Pixel 8 Mattermost アプリから `http://192.168.10.109:8065` でログイン確認
+- 用途：スマホ↔PC 間のクリップボード代わり
+- Gmail SMTP 経由メール送信：確認済み（me-bot サブアドレス宛）
+- 通知：HTTP 運用のため未対応（現状許容）
+
+### sudo NOPASSWD 設定
+- Docker 起動時の polkit 認証ダイアログを抑制
+- 原因：`make mattermost` 内の `sudo chown` が GUI 経由でパスワード要求
+- 対処：`/etc/sudoers` に `minoru ALL=(ALL:ALL) NOPASSWD: ALL` を設定
+
+### .zshrc 整理
+- `setxkbmap` / `xmodmap` 呼び出しを削除（`.xprofile` に任せる）
+- `RPROMPT` の重複定義を統合
+- `precmd` の重複を解消、`case` ブロックに統合
+- `setopt` の重複（`hist_reduce_blanks`、`hist_no_store`、`list_packed`）を削除
+- `myip` のインターフェース名ハードコードを修正
+- docker-compose エイリアスを削除（`docker/Makefile` で管理）
+- `github-new`（`hub` 依存）、`get-github-api` 関数を削除
+- PATH を History の直後に移動（早期定義）
+- セクションを見出しで整理
+
+### Linuxbrew → Hugo .deb 移行
+- brew 経由の hugo を削除、GitHub releases の `.deb` に移行
+  - `hugo_extended_0.147.0_linux-amd64.deb` をインストール
+  - 動作確認済み：`hugo v0.147.0+extended`
+- Linuxbrew 本体をアンインストール（`/home/linuxbrew` 削除）
+- `.zshrc` の Linuxbrew PATH を削除
+- `dotfiles/Makefile` に `hugo` インストールターゲット追加
+
+### ドキュメント整備
+- `dotfiles/docker/README.md` 新規作成（構築手順・注意点・リストア手順を記載）
+
+## polkit認証ダイアログ抑制
+
+### 背景
+- Docker起動時（PC再起動後の `make mattermost` 初回など）にGUI認証ダイアログが出るようになった
+- `make mattermost` 内の `sudo chown` がトリガー
+- sudoersの `NOPASSWD: ALL` 設定済みだが効かない → polkitとsudoは別物
+
+### 対処
+`/etc/polkit-1/rules.d/49-nopasswd-docker.rules` を作成：
+
+​```javascript
+polkit.addRule(function(action, subject) {
+    if ((action.id.indexOf("com.docker") === 0 ||
+         action.id.indexOf("org.freedesktop.systemd1") === 0) &&
+        subject.user === "minoru") {
+        return polkit.Result.YES;
+    }
+});
+​```
+```bash
+sudo systemctl restart polkit
+```
+
+### 動作確認済み
+- `make down && make mattermost` で問題なし
+
+### 全許可版に更新・動作確認済み
+- `/etc/polkit-1/rules.d/49-nopasswd-docker.rules` を全許可版に更新
+
+```javascript
+polkit.addRule(function(action, subject) {
+    if (subject.user === "minoru") {
+        return polkit.Result.YES;
+    }
+});
+```
+
+- `sudo systemctl restart polkit` 実施済み
+- PC再起動後の `make mattermost` でダイアログが出ないことを確認 ✓
+- `dotfiles/Makefile` に `polkit` ターゲット追加、`docker-setup` の依存に組み込み済み
+
+---
+
+## 2026-03-17
+
+# Docker 開発環境構築ログ
+date: 2026-03-17〜18
+author: Minoru Yamada
+
+---
+
+## 概要
+
+ローカルDocker環境として以下の3サービスを構築・動作確認した。
+
+- **Gitea**（ポート3000）: セルフホスト型Gitサーバー。ブラウザでリポジトリ閲覧、push/pullはmagitから行う運用。
+- **Mattermost**（ポート8065）: セルフホスト型チャット。changelog管理・メモ用途（外部公開なし）。
+- **Apache httpd**（ポート8080）: ローカルでのCGIサイト動作確認用。xserverへのアップ前テスト環境。
+
+---
+
+## ディレクトリ構成
+
+```
+dotfiles/
+├── Makefile                  # 環境リストア専用（Docker起動停止は含まない）
+└── docker/
+    ├── Makefile              # Docker管理専用
+    ├── gitea/
+    │   └── docker-compose.yml
+    ├── mattermost/
+    │   └── docker-compose.yml
+    └── httpd/
+        ├── docker-compose.yml
+        ├── httpd.conf
+        └── vhosts.conf
+
+~/Dropbox/
+├── docker-data/
+│   └── mattermost/           # Mattermostデータ永続化
+├── GH/                       # gh.local:8080 のドキュメントルート
+└── minorugh.com/             # minorugh.local:8080 のドキュメントルート
+```
+
+---
+
+## 完了した作業
+
+### 1. Gitea 構築
+
+- `docker-compose.yml` で構築
+- `http://localhost:3000` でブラウザ確認済み
+- 管理者アカウント作成・サイト管理パネル確認済み
+
+### 2. Mattermost 構築
+
+- `docker-compose.yml` で構築
+- `http://localhost:8065` でブラウザ確認済み
+- データディレクトリは `~/Dropbox/docker-data/mattermost/` に配置
+- 起動前に `sudo chown -R 2000:2000` が必要（Makefileに組み込み済み）
+
+### 3. Apache httpd 構築
+
+設定ファイル3点を作成:
+
+| ファイル | 役割 |
+|---|---|
+| `docker/httpd/docker-compose.yml` | コンテナ定義 |
+| `docker/httpd/httpd.conf` | Apache本体設定 |
+| `docker/httpd/vhosts.conf` | バーチャルホスト設定 |
+
+VirtualHost設定:
+
+| URL | ドキュメントルート |
+|---|---|
+| `http://minorugh.local:8080` | `~/Dropbox/minorugh.com` |
+| `http://gh.local:8080` | `~/Dropbox/GH` |
+
+`/etc/hosts` に追加:
+
+```
+127.0.0.1 minorugh.local
+127.0.0.1 gh.local
+```
+
+両サイトのブラウザ表示確認済み。
+
+### 4. CGI動作確認・トラブル対応
+
+#### パーミッション設定
+
+```bash
+find ~/Dropbox/GH -name "*.cgi" -o -name "*.pl" | xargs chmod 755
+find ~/Dropbox/GH -type d | xargs chmod 755
+```
+
+#### Perlパス修正
+
+xserverでは `/usr/local/bin/perl` だが、Dockerコンテナ内は `/usr/bin/perl`。
+CGIファイル1行目を修正:
+
+```perl
+#!/usr/bin/perl
+```
+
+コンテナ内のPerlパス確認方法:
+
+```bash
+docker exec httpd which perl
+# → /usr/bin/perl
+```
+
+#### CGI.pm モジュールのインストール
+
+Dockerコンテナ内にCGI.pmが入っていないため手動インストール:
+
+```bash
+docker exec httpd apt-get update && docker exec httpd apt-get install -y libcgi-pm-perl
+```
+
+> ~~コンテナを再作成するたびに再インストールが必要。~~
+> → **Dockerfileで自動化済み**（後述）。
+
+### 5. Gitea へのリポジトリ追加
+
+Giteaはブラウザ（`localhost:3000`）でファイル閲覧・履歴確認・旧バージョンDL。
+push/pullはmagitから行う。GiteaのWebUIで直接操作はしない運用。
+
+#### 手順
+
+```
+1. http://localhost:3000 でリポジトリ作成
+   - 「リポジトリの初期設定」チェックなし（空リポジトリ）
+
+2. ローカルでremote追加
+   git remote add gitea http://localhost:3000/minoru/リポジトリ名.git
+
+3. 初回push
+   git push gitea main
+   （ユーザー名: minoru、パスワード: Giteaのパスワード）
+
+4. ブラウザで確認
+   http://localhost:3000/minoru/リポジトリ名
+```
+
+#### 追加済みリポジトリ
+
+- `GH`
+- `minorugh.com`
+- `dotfiles`
+
+#### remote URLの確認・修正
+
+```bash
+cd ~/Dropbox/GH
+git remote -v
+# URLが違う場合は修正
+git remote set-url gitea http://localhost:3000/minoru/リポジトリ名.git
+```
+
+### 6. Makefile 整理
+
+Docker起動停止コマンドがリストア専用の `dotfiles/Makefile` に混在していたため分離。
+
+| ファイル | 役割 |
+|---|---|
+| `dotfiles/Makefile` | 環境リストア専用。`docker-install` / `docker-setup` ターゲットを追加 |
+| `dotfiles/docker/Makefile` | Docker起動停止管理専用。`$(PWD)` を使用して実行場所に依存しない設計 |
+
+#### 新規マシンへのDocker環境セットアップ手順
+
+```bash
+# 1. dotfilesをclone
+git clone git@github.com:minorugh/dotfiles.git /home/minoru/src/github.com/minorugh/dotfiles
+cd /home/minoru/src/github.com/minorugh/dotfiles
+
+# 2. Docker本体インストール（公式リポジトリ経由）
+make docker-install
+# → ログアウト→再ログインしてグループ反映
+
+# 3. データディレクトリ作成
+make docker-setup
+
+# 4. 各サービス起動
+cd docker
+make docker-start
+```
+
+#### docker/Makefile の主要ターゲット
+
+```bash
+make gitea          # Gitea 起動
+make gitea-down     # Gitea 停止
+make mattermost     # Mattermost 起動
+make httpd          # httpd 起動
+make docker-start   # 全サービス起動
+make docker-stop    # 全サービス停止
+make docker-ps      # 起動中コンテナ一覧
+```
+
+### 7. Dockerfile 作成（CGI.pm自動化）
+
+`docker/httpd/Dockerfile` を作成:
+
+```dockerfile
+FROM httpd:2.4
+RUN apt-get update && apt-get install -y libcgi-pm-perl && rm -rf /var/lib/apt/lists/*
+```
+
+`docker-compose.yml` の `image: httpd:2.4` を `build: .` に変更。
+反映手順:
+
+```bash
+cd /home/minoru/src/github.com/minorugh/dotfiles/docker/httpd
+docker compose down
+docker compose up -d --build
+```
+
+動作確認済み。コンテナ再作成後もCGI.pmが自動インストールされる。
+
+---
+
+## 次回の作業予定
+
+### 1. CGI絶対パス問題への対応
+
+既存CGIが本番URLで絶対パス指定している場合、ローカルテスト時に本番サーバーへ影響する可能性がある。対応方針:
+
+- 書き込み系CGIはローカルでは動かさない運用
+- または `$ENV{HTTP_HOST}` で本番/ローカルを判定する方法を検討
+
+### 2. 03-docker-setup.md の更新
+
+今回の作業内容をドキュメントに反映する。
+
+---
+
+## サブ機（X250）への展開メモ
+
+新規マシンへの展開は上記「新規マシンへのDocker環境セットアップ手順」の通り。
+`dotfiles/Makefile` の `docker-install` → `docker-setup` → `docker/Makefile` の `docker-start` の順で完結する。
+
+dotfilesのフルパス: `/home/minoru/src/github.com/minorugh/dotfiles`
+
+
+## .netrc の作成と git-crypt 対応手順
+
+### 1. Giteaのパスワード省略 → .netrc に登録
+echo "machine localhost login minoru password <Giteaのパスワード>" >> ~/.netrc
+chmod 600 ~/.netrc
+
+### 2. magitから両方に自動push → originに複数push先を登録
+cd ~/src/github.com/minorugh/dotfiles
+git remote set-url --add --push origin git@github.com:minorugh/dotfiles.git
+git remote set-url --add --push origin http://localhost:3000/minoru/dotfiles.git
+
+# git push origin main 一発でGitHubとGiteaの両方に飛ぶ
+# magitの P p も同じ動作になる
+# 他のリポジトリ（GH、minorugh.com）も同様に設定する
+
+### 3. .gitattributes に追加（push前に必ず実施）
+echo ".netrc filter=git-crypt diff=git-crypt" >> .gitattributes
+
+### 4. .netrc を dotfiles に配置してシンボリックリンク
+cp ~/.netrc ~/src/github.com/minorugh/dotfiles/.netrc
+# Makefile の init ターゲットの for item に netrc を追加
+for item in xprofile gitconfig bashrc zshrc vimrc tmux.conf Xresources textlintrc aspell.conf netrc; do
+    ln -vsf {${PWD},${HOME}}/.$$item
+done
+
+### 5. 暗号化確認してpush
+git-crypt status    # .netrc が encrypted になっていることを確認
+git add .gitattributes .netrc
+git commit -m "add: .netrc with git-crypt encryption"
+git push
+
+### ⚠️ 注意
+# git push前に必ず git-crypt status で encrypted を確認すること
+# encrypted になっていない状態でpushするとパスワードが平文でGitHubに上がる
+
+---
+
+## 2026-03-16
+
+# 2026-03-16 - ThinkPad / Xmodmap 調整
+
+## 目的
+- CapsLock を Control として使用
+- PrtSc キーを Right Alt として利用
+- Ctrl_R + PrtSc で PrintScreen を維持
+- 既存の WM ショートカット (Ctrl_R + → ← / PgUp PgDn) を壊さない
+- Emacs の既存 keybind は変更せずに執筆環境向けに最適化
+
+## 修正内容
+
+1. **modifier の破壊を防止**
+   - 以前の設定にあった `clear Control`、`clear Mod1`、`clear Mod4` を削除
+   - WM が使用する modifier を消さないことで、ショートカットを維持
+
+2. **CapsLock → Control_L**
+   ```bash
+   clear Lock
+   keycode 66 = Control_L
+   add Control = Control_L
+```
+  - Lock modifier を解除したうえで Control として再登録
+  - Caps → Ctrl の挙動が安定
+
+3. ThinkPad PrtSc キーを Alt_R 化
+
+``` bash
+  keycode 107 = Alt_R Meta_R Print Sys_Req
+```
+- 通常: Alt_R
+- Shift + PrtSc: Meta_R
+- Ctrl_R + PrtSc: Print (スクリーンショット用)
+- Ctrl_R + Shift + PrtSc: Sys_Req
+- これで WM ショートカットやスクリーンショットが両立
+
+4. Alt modifier 安定化
+
+``` bash
+remove Mod1 = Alt_R
+add Mod1 = Alt_R
+```
+- Alt_R を追加した場合、Mod1 が壊れることがあるため再登録
+- ThinkPad + xmodmap でよく使う安全策
+
+5. 日本語キーボード対応
+
+``` bash
+keycode 97 = underscore backslash underscore backslash
+```
+
+- JPキーボードの「ろ」キーを _ / \ に割り当て
+- 執筆や Emacs 利用で扱いやすく
+
+6. テンキーを常時数字化
+
+``` bash
+keycode 87 = 1
+keycode 88 = 2
+keycode 89 = 3
+keycode 83 = 4
+keycode 84 = 5
+keycode 85 = 6
+keycode 79 = 7
+keycode 80 = 8
+keycode 81 = 9
+keycode 90 = 0
+keycode 91 = period
+```
+
+- NumLock を使わず常に数字入力可能
+- 執筆用テンキー活用のため安定化
+
+## 結果
+
+
+- Caps → Ctrl 動作正常
+- PrtSc → Alt_R として利用可能
+- Ctrl_R + PrtSc → PrintScreen 動作
+- WM の Ctrl_R + → ← / PgUp PgDn ショートカット正常
+- Emacs の既存 keybind は壊さず維持
+
+## テスト手順
+
+``` bash
+# Xmodmap 適用
+xmodmap ~/.Xmodmap
+
+# modifier 状態確認
+xmodmap -pm
+
+# キー挙動確認
+xev
+
+```
+
+## 備考
+
+- ThinkPad 特有の keycode 107 (PrtSc) を活かした設計
+- 今後の拡張や他キーボードでの再現も容易
+- Reason: ThinkPad keyboard optimization for writing workflow
+- Impact: No change to existing Emacs keybindings
+
+---
+
+## 2026-03-14
+
+# 2026-03-14
+
+## ~/Dropbox/makefile
+
+- `dotfiles` / `gh` ターゲットの `--link-dest` をシングルクォート内バッククォートから変数展開（`$$PREV`）方式に修正
+  - シングルクォート内ではバッククォートがシェル展開されないバグを解消
+- cron 環境での SSH 認証失敗（`Permission denied (publickey)`）に対応
+  - 各ターゲット冒頭で `keychain --noask --quiet --eval` をロードする行を追加
+- `dotfiles` / `gh` の Xserver 側バックアップに 90 日超ディレクトリの自動削除を追加
+  - `ssh xsrv` のコマンドブロック末尾に `find ... -mtime +90 -exec rm -rf {} +` を追記
+
+---
+
 ## 2026-03-13
 
 # Changelog 2026-03-13
