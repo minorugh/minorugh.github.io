@@ -1,6 +1,6 @@
 ## 2026-03-25
 
-# 2026-03-25
+# CHANGELOG-20260325
 
 ### Removed
 - `deploy.sh` — makefile に統合済みのため削除
@@ -24,7 +24,7 @@
 
 ## 2026-03-24
 
-# 2026-03-24
+# CHANGELOG-20260324
 
 ## dotfiles/devils/ README 作成
 
