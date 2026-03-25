@@ -5,7 +5,7 @@ git:
 	git add . && git diff --cached --exit-code --quiet && echo "\nnothing to commit, working tree clean!" || \
 	git commit -a -m "Updated: `date +'%Y-%m-%d %H:%M:%S'`" && \
 	git push origin main
-	google-chrome https://github.com/minorugh/minorugh.github.io/blob/main/CHANGELOG.md
+	google-chrome https://github.com/minorugh/minorugh.github.io/blob/main/CHANGELOG.md 2>/dev/null &
 
 changelog:
 	@DATE=$$(date '+%Y-%m-%d'); \
@@ -22,10 +22,10 @@ cat:
 	cat CHANGELOG.md
 
 view:
-	google-chrome https://github.com/minorugh/minorugh.github.io/blob/main/CHANGELOG.md
+	google-chrome https://github.com/minorugh/minorugh.github.io/blob/main/CHANGELOG.md 2>/dev/null &
 
 commits:
-	google-chrome https://github.com/minorugh/minorugh.github.io/commits/main
+	google-chrome https://github.com/minorugh/minorugh.github.io/commits/main 2>/dev/null &
 
 actions:
-	google-chrome https://github.com/minorugh/minorugh.github.io/actions
+	google-chrome https://github.com/minorugh/minorugh.github.io/actions 2>/dev/null &
