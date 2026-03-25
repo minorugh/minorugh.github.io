@@ -15,5 +15,5 @@ plugins:
 exclude:
   - makefile
   - deploy.sh
-  - README.md
+#  - README.md
 
