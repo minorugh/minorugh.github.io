@@ -1,3 +1,221 @@
+## 2026-03-27
+
+# CHANGELOG-20260327
+
+## gitk テーマ調整
+- `~/.config/git/gitk` に `set want_ttk 1` を設定
+- Dracula テーマはすでに設定済みだったことを確認
+- Tk の制約でフレーム枠の改善は限界と判断
+
+## tig インストール
+- `sudo apt install tig` で導入
+- 基本操作確認：コミット移動、diff表示、ツリー表示
+- dotfiles Makefile の `install` グループに `tig` を追加
+
+## my:git-show-file 実装（`09-funcs.el`）
+- git 管理リポジトリから過去バージョンのファイルを取り出す Emacs コマンド
+- 操作フロー：ファイル選択（ivy）→ そのファイルの変更履歴から選択（ivy）→ 保存
+- 保存先：`~/Dropbox/backup/tmp/ファイル名_YYYYMMDD-HHMM`
+- 保存後に `~/Dropbox/backup/tmp/` を dired で開く
+- コミット日時をファイル名に埋め込む（`%cd --date=format:` を `concat` で組み立て）
+- `format` 関数内での `%` エスケープ問題を `concat` で回避
+- 世代バックアップの代替として git を活用する画期的なワークフローが完成
+
+## my:tig 実装（`09-funcs.el`）
+- カレントディレクトリの git リポジトリで tig を gnome-terminal で開く Emacs コマンド
+- `locate-dominating-file` でリポジトリルートを自動検出
+- `start-process` で gnome-terminal を起動し tig を実行
+
+## 40-hydra-dired.el キーバインド変更
+- `("g" gitk-open)` → `("g" my:git-show-file)` に変更（gitk から卒業）
+- `("t" my:tig)` を追加（tig でコミット履歴確認）
+
+---
+
+## 自作 Emacs Lisp の autoload 化対応
+
+### 背景
+
+Claude と共同で作成した便利関数が増加し、Emacs 起動時間への影響が出始めたため、
+`require` による即時ロードから `autoload` による遅延ロードへ移行した。
+
+---
+
+### 変更ファイル一覧
+
+**修正（`;;;###autoload` 追加）**
+
+| ファイル | autoload数 | 主な変更 |
+|---|---|---|
+| `my_dired.el` | 34 | 全関数に `;;;###autoload` 追加 |
+| `my_github.el` | 1 | 全関数に `;;;###autoload` 追加 |
+| `my_template.el` | 13 | 全関数に `;;;###autoload` 追加 |
+
+**整備（ヘッダー・`provide`・`lexical-binding` も追加）**
+
+| ファイル | autoload数 | 主な変更 |
+|---|---|---|
+| `my_git-show-file.el` | 1 | ヘッダー・`lexical-binding`・`provide`・`declare-function`・`;;;###autoload` を新規追加 |
+| `my_marhdown.el` | 3 | ヘッダー・`lexical-binding`・`provide`・`;;;###autoload` を新規追加 |
+
+---
+
+### 新規追加ファイル
+
+- `~/.emacs.d/elisp/Makefile`
+  - `make` で `my-loaddefs.el` を再生成
+  - `make clean` で `my-loaddefs.el` を削除
+
+---
+
+### init.el の変更
+
+`init-loader` の `:init` ブロック内、`load-path` 設定の直後に1行追加。
+
+```emacs-lisp
+(load "~/.emacs.d/elisp/my-loaddefs.el" t t)
+```
+
+---
+
+### 削除対象
+
+inits 群に存在する以下の `require` を削除する。
+
+```emacs-lisp
+(require 'my:dired)
+(require 'my:template)
+(require 'my:github)
+```
+
+---
+
+### 運用ルール（今後）
+
+1. 自作 `.el` には必ず `lexical-binding: t`・`;;;###autoload`・`provide` の3点セットを書く
+2. 関数を追加・変更したら `cd ~/.emacs.d/elisp && make` を実行して `my-loaddefs.el` を再生成する
+3. inits 群には `require` を書かない
+
+
+---
+
+## Emacs 接イェイファイルの  my: プレフィックスを my- に全面変更
+
+### elisp/ 配下のファイルリネーム
+```bash
+for f in my:*.el my:*.elc; do mv "$f" "${f/my:/my-}"; done
+```
+
+### ファイル内シンボル名（provide/require/関数名）一括置換
+```bash
+grep -rl "my:" --include="*.el" --exclude-dir=tmp . | xargs sed -i 's/my:/my-/g'
+```
+
+### Makefile の : エスケープ問題を .PHONY 方式で回避
+- ターゲット名に `:` を使うと make がセパレータと誤認するため
+
+### elisp/Makefile の LOADDEFS を手動修正
+```bash
+sed -i 's/my:loaddefs/my-loaddefs/g' ~/.emacs.d/elisp/Makefile
+```
+
+---
+
+## elisp/Makefile を大幅改善
+
+### toggle-elc ターゲット追加
+- `.elc` があれば削除、なければバイトコンパイルのトグル動作
+- `a.out: toggle-elc` で `make -k` 一発実行
+- `clean` は `toggle-elc` に委譲してコード重複を排除
+
+### auto-compile 導入を試みたが断念
+- シンボリックリンク経由のパス問題やフック未登録など原因不明
+- `elisp/` のバイトコンパイルは `make -k`（toggle-elc）で手動運用に決定
+
+### ターゲットにコメント追加
+- 各ターゲットに `## 英語説明` を追記
+
+### 成果品
+```makefile
+# Makefile for ~/.emacs.d/elisp/
+# Usage: make           → toggle *.elc (compile if none, remove if exists)
+#        make compile   → regenerate my-loaddefs.el
+#        make clean     → same as toggle-elc
+ELISP_DIR  := $(shell cd "$(dir $(abspath $(lastword $(MAKEFILE_LIST))))" && pwd)
+LOADDEFS   := $(ELISP_DIR)/my-loaddefs.el
+EMACS      := emacs
+
+.PHONY: all clean compile toggle-elc
+
+a.out: toggle-elc
+
+toggle-elc: ## Toggle *.elc: remove if exists, byte-compile if not
+	@if ls *.elc 2>/dev/null | grep -q .; then \
+	    rm -f $(LOADDEFS) *.elc; \
+	    echo "Removed $(LOADDEFS) and *.elc"; \
+	else \
+	    $(EMACS) --batch -Q \
+	      --eval "(byte-recompile-directory \"$(ELISP_DIR)\" 0 t)"; \
+	    echo "Compiled *.elc"; \
+	fi
+
+clean: ## Same as toggle-elc
+	@$(MAKE) toggle-elc
+
+compile: ## Regenerate my-loaddefs.el using loaddefs-generate
+	@echo "Generating $(LOADDEFS) ..."
+	$(EMACS) --batch -Q \
+	  --eval "(loaddefs-generate \"$(ELISP_DIR)\" \"$(LOADDEFS)\")" \
+	  --eval "(message \"Done: %s\" \"$(LOADDEFS)\")"
+	@echo "Done."
+```
+
+---
+
+## 20-check.el `void-variable textlint` エラー修正
+
+### 症状
+- Emacs 起動時に以下のエラーが発生
+  - `File mode specification error: (void-variable textlint)`
+  - `eval-after-load-helper: Symbol's value as variable is void: textlint`
+- 各モードで文字色（syntax highlight）が反映されず、プレーンテキスト表示になる
+
+### 原因
+`20-check.el` の `(leaf textlint ...)` ブロックが問題。
+`textlint` は Emacs パッケージとして存在しないため `:ensure nil` にしているが、
+`:after flycheck` と組み合わさったとき `eval-after-load-helper` が
+`textlint` シンボルを変数として解決しようとしてエラーになる。
+
+### 修正
+`(leaf textlint ...)` ブロック全体を `with-eval-after-load` に書き換え。
+
+**変更前**
+```elisp
+(leaf textlint
+  :ensure nil
+  :doc "Checker for textlint."
+  :after flycheck
+  :config
+  (flycheck-define-checker textlint ...))
+```
+
+**変更後**
+```elisp
+(with-eval-after-load 'flycheck
+  (flycheck-define-checker textlint
+    "A linter for prose."
+    :command ("textlint" "--format" "unix" source-inplace)
+    :error-patterns
+    ((warning line-start (file-name) ":" line ":" column ": "
+              (id (one-or-more (not (any " "))))
+              (message (one-or-more not-newline)
+                       (zero-or-more "\n" (any " ") (one-or-more not-newline)))
+              line-end))
+    :modes (markdown-mode gfm-mode org-mode web-mode)))
+```
+
+---
+
 ## 2026-03-25
 
 # CHANGELOG-20260325
