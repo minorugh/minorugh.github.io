@@ -216,6 +216,404 @@ compile: ## Regenerate my-loaddefs.el using loaddefs-generate
 
 ---
 
+## 2026-03-26
+
+# CHANGELOG-20260326
+
+## init.md の旧版（GitHub 掲載版）から新版への変更点をまとめています。
+
+---
+
+## ドキュメント全体の構成変更
+
+| 項目 | 旧版 | 新版 |
+|------|------|------|
+| セクション構成 | 機能カテゴリ別（任意順） | ファイル番号順（00-base → 90-easy-hugo） |
+| ファイル名表記 | アンダースコア区切り（`00_base.el`） | ハイフン区切り（`00-base.el`） |
+| ディレクトリ構成 | 概略のみ（旧ファイル名・存在しないファイルを含む） | 実際の `ls` 出力に完全一致 |
+| `elisp/` 配下 | 記載なし | ローカルパッケージを明示 |
+| ファイル番号の意味 | 記載なし | カテゴリ表として追記 |
+| `test.el` | ミニマル起動ファイルとして記載 | `init-mini.el` に改名、内容も更新 |
+
+---
+
+## 起動設定
+
+### early-init.el
+
+| 項目 | 旧版 | 新版 |
+|------|------|------|
+| native-comp 対応 | なし | `native-comp-jit-compilation nil` 追加 |
+| パッケージ初期化の委譲 | なし | `package-enable-at-startup nil` 追加 |
+| `load-prefer-newer` | なし | `noninteractive` 条件付きで追加 |
+| フレームリサイズ抑制 | なし | `frame-inhibit-implied-resize t` 追加 |
+| 起動時チラつき抑制 | `inhibit-redisplay` / `inhibit-message` + hook | `set-face-attribute` で背景色を直接指定（よりシンプル） |
+| フォント設定 | `init.el` 内 | `early-init.el` に移動（起動高速化） |
+| 言語環境設定 | `init.el` 内 | `early-init.el` に移動 |
+
+### init.el
+
+| 項目 | 旧版 | 新版 |
+|------|------|------|
+| Emacs バージョンチェック | なし | 29.1 以上を要求 |
+| leaf のインストール方法 | `package-install 'leaf` | `use-package leaf :ensure t` 経由 |
+| package-archives | gnu / melpa / **org** | gnu / melpa のみ（org elpa 削除） |
+| `init-loader-byte-compile` | なし | `t` を設定（自動バイトコンパイル） |
+| `custom-file` の分離 | なし | `tmp/custom.el` に明示分離 |
+| `elisp/` の load-path 追加 | なし | サブディレクトリも含めて追加 |
+| `exec-path-from-shell` | `PATH` のみ継承 | `SSH_AUTH_SOCK` も継承（keychain 連携） |
+
+### init-mini.el（旧 test.el）
+
+| 項目 | 旧版（test.el） | 新版（init-mini.el） |
+|------|----------------|---------------------|
+| ファイル名 | `test.el` | `init-mini.el` |
+| alias 記述 | `alias eq = '...'`（スペースあり・誤り） | `alias eq="..."` |
+| 補完 | ivy（外部パッケージ） | `fido-mode` / `fido-vertical-mode`（built-in） |
+| electric-pair | なし | `electric-pair-mode` 追加 |
+
+---
+
+## パッケージの追加・変更・削除
+
+### 新規追加
+
+| パッケージ | ファイル | 概要 |
+|-----------|---------|------|
+| `evil` + `evil-leader` | 03-evil.el | vi/vim スタイル操作体系（旧ドキュメントに記載なし） |
+| `goggles` | 07-highlight.el | 編集領域フラッシュ（volatile-highlights の代替） |
+| `rainbow-delimiters` | 07-highlight.el | 括弧のレインボー表示 |
+| `super-save` | 20-edit.el | スマート自動保存（auto-save-buffers-enhanced の代替） |
+| `atomic-chrome` | 20-edit.el | ブラウザのテキストエリアを Emacs で編集 |
+| `undohist` | 20-edit.el | undo 履歴の永続化 |
+| `sudo-edit` | 20-edit.el | root 権限でファイル編集 |
+| `ediff` 設定 | 20-edit.el | 差分編集（水平分割・シンプルモード） |
+| `hide-mode-line` | 30-ui.el | imenu-list / neotree でモードライン非表示 |
+| `display-fill-column-indicator` | 30-ui.el | 79列目ガイドライン（built-in） |
+| `projectile` | 30-utils.el | プロジェクト管理 |
+| `persistent-scratch` | 30-utils.el | scratch バッファ永続化 |
+| `bs` | 30-utils.el | バッファ循環（built-in） |
+| `deepl-translate` | 70-translate.el | DeepL API 翻訳（自作パッケージ） |
+| `deepl-translate-web` | 70-translate.el | ブラウザで DeepL を開く |
+| `mozc-cursor-color` | 06-mozc.el | IME 状態をカーソル色で表示（自作パッケージ） |
+| `avy` | 04-counsel.el | キーワードジャンプ |
+| `migemo` + `my:ivy-migemo-re-builder` | 04-counsel.el | swiper での日本語インクリメンタル検索 |
+| `google-this` | 10-selected.el | カーソル位置の単語を Google 検索 |
+| `textlint` チェッカー | 20-check.el | 文章の lint（flycheck 連携） |
+| `ispell` / `hunspell` | 20-check.el | スペルチェック |
+| `hydra-dired` | 40-hydra-dired.el | ディレクトリランチャー（`M-.`） |
+
+### パッケージの置き換え・移行
+
+| 旧パッケージ | 新パッケージ | ファイル | 理由 |
+|-------------|------------|---------|------|
+| `volatile-highlights` | `goggles` | 07-highlight.el | より現代的な実装 |
+| `all-the-icons` | `nerd-icons` | 30-ui.el | Emacs 29 時代の標準 |
+| `all-the-icons-dired` | `nerd-icons-dired` | 30-ui.el | 同上 |
+| `all-the-icons-ivy-rich` | — | — | nerd-icons 移行により不要 |
+| `flymake` + `flymake-posframe` | `flycheck` | 20-check.el | 構文チェックを flycheck に統一 |
+| `auto-save-buffers-enhanced` | `super-save` | 20-edit.el | シンプルで安定した実装 |
+| `auto-save-buffers-enhanced`（scratch 用） | `persistent-scratch` | 30-utils.el | scratch 専用パッケージに分離 |
+| `swiper-migemo`（el-get） | `my:ivy-migemo-re-builder` | 04-counsel.el | 外部依存を排除し内製化 |
+| `mozc-posframe` | `mozc-popup` | 06-mozc.el | 候補表示スタイルの変更 |
+| `defadvice` (mozc) | `advice-add` | 06-mozc.el | 現代的な advice API に統一 |
+
+### 削除されたパッケージ
+
+| パッケージ | 理由 |
+|-----------|------|
+| `restart-emacs` | `C-x C-c` を `server-edit` に変更したため不要 |
+| `smartparens` | `elec-pair`（built-in）で代替 |
+| `open-junk-file` | `org-capture` テンプレートで代替 |
+| `tempbuf` | `super-save` + `persistent-scratch` で代替（※ elisp/ には残存） |
+| `amx` | `prescient` の履歴機能で代替 |
+| `ivy-prescient` の分散設定 | `05-company.el` に集約 |
+| `symbol-overlay` | — |
+| `emacs-livedown` | `markdown-preview-use-browser` で代替 |
+| `page-break-lines`（独立設定） | `01-dashboard.el` 内に統合 |
+| `nyan-mode` | doom-modeline から削除 |
+| `popwin` 独立設定 | `30-utils.el` に統合（機能は継続） |
+
+---
+
+## 各ファイルの主な変更点
+
+### 00-base.el
+
+- `bidi-paragraph-direction 'left-to-right` 追加（描画高速化）
+- `vc-follow-symlinks t` 追加
+- `delete-by-moving-to-trash t` 追加
+- `require-final-newline t` / `next-line-add-newlines nil` 追加
+- シェル系ドットファイルの `auto-mode-alist` 設定を追加
+- 履歴・データファイルのパスを `tmp/` 配下に一元管理
+- `handle-delete-frame` の上書き追加（最後のフレームを最小化）
+- `C-x C-c` → `server-edit`（誤終了防止）
+- `delete-this-file`（`C-x /`）追加
+- `other-window-or-split` から `dimmer` / `follow-mode` 連動を削除（シンプル化）
+
+### 02-git.el
+
+- キーバインド：`M-g s` → `C-x g`
+- `hydra-magit` 追加（blame / checkout / log / gitk / timemachine）
+- `gitk-open` 関数追加
+- `diff-hl` を `02-git.el` に移動・色を明示設定
+- `git-timemachine-toggle` → `git-timemachine`
+
+### 04-counsel.el
+
+- `counsel-ag` に `advice-add` でカーソル位置ワードを初期入力に利用
+- `swiper-migemo`（el-get）廃止 → `my:ivy-migemo-re-builder` で内製化
+- `avy` 追加（`C-r`）
+- アイコン表示を `all-the-icons-octicon` → nerd-icons フォント直接指定に変更
+
+### 05-company.el
+
+- `company-idle-delay`：`0`（即時）→ `0.5`
+- 補完トリガー：`C-<return>` → `<backtab>`
+- `prescient` / `yasnippet` を本ファイルに集約
+
+### 06-mozc.el
+
+- `mozc-posframe` → `mozc-popup`
+- `mozc-leim-title`：`"かな"` → `"あ"`
+- `my:toggle-input-method` 新設（evil 連携）
+- `my:mozc-config` 追加（設定ダイアログ）
+- `mozc-tool` 呼び出し：`compile` → `start-process`
+- `?` / `!` の即時入力を削除（`,` / `.` のみ残存）
+- `mozc-protobuf-get` への `advice-add` パッチ追加（仕様変更対応）
+
+### 07-highlight.el
+
+- `volatile-highlights` → `goggles`
+- `rainbow-delimiters` 追加
+- `elec-pair` で text-mode を無効化（yasnippet 競合回避）
+- `aggressive-indent` を `global` 有効化（html-mode 除外）
+- `web-mode` をこのファイルに移動、`web-mode-enable-auto-indentation nil` 追加
+
+### 08-dimmer.el
+
+- 起動方法を改善：`window-configuration-change-hook` で初回自動有効化
+- minibuffer 出入り時・imenu-list 表示時に自動 on/off
+- `dimmer-configure-*` を `dimmer-excludes` にまとめて startup hook で実行
+- `dimmer-fraction`：`0.6` → `0.5`
+- `other-window-or-split` との連動廃止
+
+### 10-selected.el
+
+- `my:koujien` / `my:eijiro` 削除
+- `chromium-translate` 削除
+- `my:google` → `my:google-this`（`google-this` パッケージ利用）
+- `deepl-translate`（`d`）追加
+- `region-or-read-string` ヘルパー追加
+- `inactivate-input-method` → `deactivate-input-method`（API 変更対応）
+
+### 20-check.el
+
+- `flymake` + `flymake-posframe` → `flycheck` に移行
+- `textlint` チェッカー追加
+- `ispell` / `hunspell` 設定追加
+
+### 20-edit.el
+
+- `auto-save-buffers-enhanced` → `super-save`
+- `imenu-list` をこのファイルに移動、`j`/`k` キーバインド追加
+- `atomic-chrome` 追加
+- `ediff` 設定追加
+- `undohist` 追加
+- `sudo-edit` 追加
+- `open-junk-file` / `tempbuf` 削除
+
+### 30-ui.el
+
+- `all-the-icons` → `nerd-icons` / `nerd-icons-dired`
+- `hide-mode-line` 追加
+- `display-fill-column-indicator` 追加（79列ガイドライン）
+- `whitespace` の `my:cleanup-for-spaces-safe` 強化（NBSP・ゼロ幅スペース対応）
+- `nyan-mode` 削除
+- `line-spacing` の `my:linespacing` 設定削除
+
+### 30-utils.el
+
+- `which-key`：MELPA → built-in（`:ensure nil`）、`which-key-delay 0.0` 追加
+- `key-chord`：MELPA → `elisp/` ローカルパッケージ
+- `persistent-scratch` 追加（scratch 永続化）
+- `toggle-scratch` をここで管理
+- `bs` 追加（`M-]`/`M-[`）
+- `projectile` 追加
+- `sequential-command`：el-get → `elisp/` ローカルパッケージ
+- `prescient` / `amx` を他ファイルに移動
+
+### 60-howm.el
+
+- migemo 連携設定を追加（`cmigemo` 直接指定）
+- `howm-view-title-regexp` で `##` 以降を一覧から除外
+- `howm-user-font-lock-keywords` を拡張（7カテゴリ）
+- `howm-template` で3種類のテンプレートを定義
+- `my:howm-create-note` / `my:howm-create-memo` / `my:howm-create-tech` 追加
+- `my:howm-fix-after-super-save`（Perl スクリプト連携）追加
+- `org-capture` との連携廃止、howm 独自関数に統一
+
+### 60-markdown.el
+
+- `README.md` → `gfm-mode`、その他 → `markdown-mode` と使い分け
+- プレビュー：`emacs-livedown` → `pandoc` + Chrome
+- `my:howm-fix-code-comments` 追加（`C-c #`）
+- `my:delete-tmp-markdown-html` 追加
+- `gen-toc-term` 追加
+- `md2pdf` / `md2docx` 追加（pandoc 変換）
+- カスタム CSS + `highlight.js` によるプレビュー強化
+
+### 60-org.el
+
+- `org-agenda-files`：`~/Dropbox/org/` → `~/Dropbox/howm/org/`
+- `org-agenda-span`：`30`（数値）→ `'month`（シンボル）
+- `org-startup-truncated nil` 追加
+- `org-capture-templates` を大幅拡張（8カテゴリ）
+- `timep-use-speed-commands` → `org-use-speed-commands`（typo 修正）
+- `calendar` / `japanese-holidays` をこのファイルに統合
+
+### 70-translate.el
+
+- `deepl-translate`（自作パッケージ）追加
+- `deepl-translate-web` 追加（ブラウザ連携）
+- DeepL API 認証方式の変更対応（2026-03-10）
+
+### 80-darkroom.el
+
+- トリガーキー：`[f12]` → `[f8]`
+- `toggle-frame-fullscreen` 追加（全画面化）
+- `evil-emacs-state` / `evil-normal-state` 連携追加
+- `line-spacing`：`my:linespacing` への依存を廃止、直接 0 / 0.2 を設定
+- `view-mode` 連動廃止
+- `revert-buffer` 廃止
+
+### 90-easy-hugo.el
+
+- 管理ブログ数：1 → 8（`easy-hugo-bloglist` で blog2〜8 を追加）
+- カスタムヘルプメニュー（`easy-hugo-help`）定義
+- `my:edit-easy-hugo` 追加（設定ファイルを直接開く）
+- `my:easy-hugo-newpost-after` 追加（新規ポスト後の evil 連携）
+
+---
+
+## typo・誤記の修正（旧ドキュメントから引き継がれていたもの）
+
+| 箇所 | 旧（誤） | 新（正） |
+|------|---------|---------|
+| alias 記述 | `alias eq = '...'` | `alias eq="..."` |
+| `.coderc` | `.coderc` | `.bashrc` |
+| `company-yasunippets` | `company-yasunippets` | `company-yasnippet` |
+| `councel-fontawesome` | `councel-fontawesome` | `counsel-fontawesome` |
+| `FontAwesome` パッケージ名 | `FontAwesome` | `fontawesome` |
+| `code-quote-argument` | `code-quote-argument` | `shell-quote-argument` |
+| `code-command-to-string` | `code-command-to-string` | `shell-command-to-string` |
+| `gonome-terminal` | `gonome-terminal` | `gnome-terminal` |
+| `timep-use-speed-commands` | `timep-use-speed-commands` | `org-use-speed-commands` |
+| `#!/bin/code`（dvpd.sh） | `#!/bin/code` | `#!/bin/zsh` |
+| セクション名 | `デレクトリ構成` | `ディレクトリ構成` |
+
+
+---
+
+## Thunderbird バックアップ構成の整理
+
+### thunderbird-backup.sh
+- バックアップ先を `.thunderbird/`（隠しディレクトリ）から `profile/` に変更
+- `set -e` を削除、`pkill` に `|| true` を追加（autobackup.sh の終了コード判定と整合）
+- `mkdir -p "$DST"` を追加（初回実行時のディレクトリ自動作成）
+- ログにタイムスタンプを追加（mattermost-backup.sh と形式を統一）
+
+### ~/Dropbox/backup/thunderbird/README.md
+- 作業中メモ（thunderbird-backup.md）と古い README.md を廃棄
+- 現状構成を正確に反映した README.md に書き直し
+- スクリプトパスを `dotfiles/cron/` に明記
+- External Editor Revived の GLIBC 制約を表形式で記載
+
+### ~/Dropbox/makefile
+- `melpa` ターゲットのコメントを「git push 方式」に更新
+- 古い tar.gz 世代管理処理（`rm -rf` + `tar cfz` の2行）を削除
+- 修正履歴に `2026-03-26` エントリを追加
+
+
+---
+
+## Gnome keyring 管理方式の変更
+
+### 変更概要
+
+P1（親機）の keyring 管理をシンボリックリンク方式から実体コピー方式に移行した。
+あわせて autostart.sh の条件分岐を削除し、mozc 同期・keyrings コピーを両機共通処理に統一した。
+
+### 変更前
+
+- P1：`~/.local/share/keyrings` → `~/Dropbox/backup/keyrings` のシンボリックリンク（Dropbox が正本）
+- サブ機：`autostart.sh` 起動時に `cp -a` でコピー
+
+### 変更後
+
+- P1・サブ機共通：起動時に `autostart.sh` が Dropbox から `rsync` でコピー
+- P1：毎晩 `autobackup.sh` で `~/.local/share/keyrings` を Dropbox にバックアップ
+
+### 変更ファイル
+
+**`~/Dropbox/makefile`**
+- `keyring-backup` ターゲットを追加
+
+```makefile
+## Gnome keyring を Dropbox にバックアップ（P1 の実体 → Dropbox）
+keyring-backup:
+	rsync -av --delete ${HOME}/.local/share/keyrings/ ${HOME}/Dropbox/backup/keyrings/
+```
+
+- `keyring` ターゲットのコメントアウトコード（旧シンボリックリンク方式）を削除
+- `make keyring` の説明を「全機共通コピー方式」に更新
+
+**`/usr/local/bin/autobackup.sh`**
+- `run_target "keyring" keyring-backup` を追加（mozc-backup の後）
+
+**`~/.autostart.sh`**
+- P1 判定の `if` 条件分岐を完全に削除
+- mozc 同期・keyrings コピーを両機共通処理に統一
+- `cp -a` → `rsync --delete` に変更
+
+```bash
+# 両機共通: mozc 設定と keyrings を Dropbox からリストア
+rsync -av --delete ~/Dropbox/backup/mozc/.mozc/ ~/.mozc/
+rsync -av --delete ~/Dropbox/backup/keyrings/ ~/.local/share/keyrings/
+```
+
+### P1 での移行手順（実施済み）
+
+```bash
+rm -f ~/.local/share/keyrings
+rsync -av --delete ~/Dropbox/backup/keyrings/ ~/.local/share/keyrings/
+```
+
+### ~/Dropbox/backup/ サブディレクトリ README 整備
+- 各サブディレクトリに README.md を新規作成（changelog, emacs, filezilla, gitea, gnupg, icons, keypassX, keyrings, mattermost, mozc, ssh, tokens, zsh）
+- 内容は「何が入っているか・どのスクリプトが読み書きするか」の最小限に統一
+
+### Gnome Keyring 管理方式の変更
+- P1：シンボリックリンク方式 → 実体コピー方式に移行（`rm -f ~/.local/share/keyrings` → `rsync`）
+- autobackup.sh に `keyring-backup` ターゲットを追加
+- autostart.sh の P1 判定条件分岐を削除、mozc・keyrings リストアを両機共通化
+- keyrings.bak/ を保険として保留中（再起動確認済み、数日後に削除予定）
+
+### Thunderbird バックアップ構成の整理
+- thunderbird-backup.sh：バックアップ先を `profile/` に変更、`set -e` 削除、タイムスタンプ追加
+- thunderbird/README.md：現状構成を正確に反映した内容に書き直し
+- ~/Dropbox/makefile：melpa コメントを「git push 方式（7日分世代バックアップ併用）」に更新、旧 tar.gz 世代管理処理を削除
+
+---
+
+### elpa バックアップ方式を刷新
+- .emacs.d/elpa 内の .git 管理・elpa.git ベアリポジトリを廃止
+- ~/Dropbox/backup/elpa/ を新設、rsync + git push（Gitea・Xserver）方式に移行
+- .emacs.d/Makefile を廃止、melpa ターゲットを ~/Dropbox/makefile に直接統合
+- Gitea の旧 elpa リポジトリを削除・再作成、Xserver に elpa.git ベアリポジトリ新設
+
+---
+
 ## 2026-03-25
 
 # CHANGELOG-20260325
