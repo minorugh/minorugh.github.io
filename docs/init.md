@@ -209,22 +209,24 @@ xrdb -merge ~/.Xresources
     :init
     (leaf hydra :ensure t)
     :config
-    (leaf-keywords-init))
+    (leaf-keywords-init)))
 
-  (leaf init-loader
-    :ensure t
-    :config
-    (setq init-loader-show-log-after-init 'error-only)
-    (setq init-loader-byte-compile t)
-    (init-loader-load)
-    :init
-    (setq custom-file (locate-user-emacs-file "tmp/custom.el"))
-    (let ((default-directory "~/.emacs.d/elisp/"))
-      (add-to-list 'load-path default-directory)
-      (normal-top-level-add-subdirs-to-load-path))))
+(setq custom-file (locate-user-emacs-file "tmp/custom.el"))
+
+(leaf *load-my-packages
+  :load-path "~/.emacs.d/elisp"
+  :require (my-dired my-github my-markdown my-template))
+
+(leaf init-loader
+  :ensure t
+  :config
+  (setq init-loader-show-log-after-init 'error-only)
+  (setq init-loader-byte-compile t)
+  (init-loader-load))
+
 ```
 
-`init-loader-byte-compile t` を設定することで inits/ 配下のファイルを自動バイトコンパイルします。`custom-file` は `tmp/custom.el` に分離しています。
+`eval-and-compile` ブロックでは leaf.el の初期化のみを行います。`custom-file` は `tmp/custom.el` に分離し、ローカルパッケージは `:load-path` を使って `elisp/` 配下から直接 `require` しています。`init-loader` は `eval-and-compile` の外に独立させ、`inits/` 配下のファイルをバイトコンパイルしながら順次読み込みます。
 
 #### 2.2.3. サーバー・シェル環境
 
