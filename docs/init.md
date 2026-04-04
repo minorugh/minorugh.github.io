@@ -386,50 +386,32 @@ alias eq="emacs -q -l ~/.emacs.d/init-mini.el"
 
 ## 5. Git 関連（02-git.el）
 
-### 5.1. [magit] Git クライアント
+### 5.1. [git-peek] コミット差分の高速プレビュー
 
-```code
-(leaf magit :ensure t
-  :bind (("C-x g" . magit-status)
-         ("M-g"   . hydra-magit/body))
-  :config
-  (setq magit-display-buffer-function
-        #'magit-display-buffer-fullframe-status-v1))
-```
+Claude と共同開発した自作パッケージです。git 管理下のファイルの過去バージョンを ivy で選択し、左右分割のサイドバー UI でプレビューしながら `~/Dropbox/backup/tmp/` に保存できます。
 
-`magit-status` はフルフレームで表示します。`M-g` で hydra メニューを呼び出せます。
-
-```
-hydra-magit: m)status  b)lame  c)heckout  l)og  g)itk  t)imemachine
-```
-
-### 5.2. [diff-hl] 編集差分の視覚化
-
-```code
-(leaf diff-hl :ensure t
-  :hook ((after-init-hook . global-diff-hl-mode)
-         (after-init-hook . diff-hl-margin-mode)))
-```
-
-フレーム端に変更箇所をカラーで表示します。色は `custom-set-faces` で明示設定しています。`hydra-diff`（evil-leader の `h`）で hunk 間の移動・revert が行えます。
-
-### 5.3. [git-peek] コミット差分の高速プレビュー
-
-フォーク版（`minorugh/git-peek`）を `:vc` でインストールしています。
-
-```code
+公開リポジトリを `:vc` でインストールしています。
+```elisp
 (leaf git-peek
   :vc (:url "https://github.com/minorugh/git-peek")
   :commands (git-peek git-peek-emergency-quit))
 ```
 
+主な機能：
+
+* 現在のバッファがリポジトリ内のファイルに一致する場合は ivy をスキップして直接起動
+* 左サイドバーにコミット一覧、右にリアルタイムプレビュー
+* `s` で `YYYYMMDD_ファイル名` 形式で保存、`q` で元のウィンドウ配置に復元
+* `C-d` で全文表示 ↔ diff 表示をトグル
+* `git-peek-deleted` で削除済みファイルの過去バージョンも取り出せる
+* dimmer-mode が有効な場合は起動中に自動で一時停止
+
 セッション中にプレビューが残ってしまった場合に備え、`git-peek-emergency-quit` を定義しています。モードライン色の復元・dimmer の再有効化・バッファの強制削除を一括で行います。
 
-### 5.4. その他のユーティリティ
+### 5.2. その他のユーティリティ
 
 * `gitk-open`：カレントディレクトリで gitk を起動
 * `my-tig`：gnome-terminal で tig を起動（リポジトリルートに自動移動）
-* `git-timemachine`：ファイルの git 履歴を時系列で閲覧
 * `browse-at-remote`：カーソル位置の GitHub ページをブラウザで開く
 
 
