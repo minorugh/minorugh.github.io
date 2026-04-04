@@ -44,8 +44,9 @@ title: Emacs Configuration
 │   ├── 02-git.el
 │   ├── 03-evil.el
 │   ├── 04-counsel.el
+│   ├── 05-swiper.el
 │   ├── 05-company.el
-│   ├── 06-mozc.el
+│   ├── 07-mozc.el
 │   ├── 07-highlight.el
 │   ├── 08-dimmer.el
 │   ├── 09-funcs.el
@@ -129,7 +130,7 @@ title: Emacs Configuration
 ;; エンコーディングとフォント
 (prefer-coding-system 'utf-8)
 (set-language-environment "Japanese")
-(add-to-list 'default-frame-alist '(font . "Cica-18"))
+(push '(font . "Cica-18") default-frame-alist)
 
 ;; UI要素を非表示
 (push '(menu-bar-lines . 0) default-frame-alist)
@@ -140,11 +141,10 @@ title: Emacs Configuration
 (push '(fullscreen . maximized) initial-frame-alist)
 ```
 
-テーマ読み込み前の一瞬の白背景（フラッシュ）を防ぐため、背景色・前景色は `~/.Xresources` で X11 リソースレベルに設定しています。`early-init.el` ではなく起動前に適用されるため、より確実にフラッシュを抑制できます。
-
 #### 2.1.3. ~/.Xresources による X11 レベルの設定
 
 `early-init.el` が読み込まれる前に Emacs へ適用したい設定は `~/.Xresources` に記述しています。
+
 ```
 !! Disable XIM when using Emacs
 Emacs*useXIM: false
@@ -160,9 +160,10 @@ Emacs.foreground: #f8f8f2
 |---------|------|
 | `Emacs*useXIM: false` | XIM（X Input Method）を無効化。Fcitx / IBus との競合・入力遅延を防ぐ |
 | `Xft.dpi: 120` | Xft 経由のフォントレンダリング DPI をモニターに合わせて指定 |
-| `Emacs.background / foreground` | テーマ読み込み前のフレーム初期色。白フラッシュを防ぐ |
+| `Emacs.background / foreground` | テーマ読み込み前のフレーム初期色。起動時の白フラッシュを防ぐ |
 
 設定変更後は以下で反映します。
+
 ```
 xrdb -merge ~/.Xresources
 ```
@@ -223,7 +224,6 @@ xrdb -merge ~/.Xresources
   (setq init-loader-show-log-after-init 'error-only)
   (setq init-loader-byte-compile t)
   (init-loader-load))
-
 ```
 
 `eval-and-compile` ブロックでは leaf.el の初期化のみを行います。`custom-file` は `tmp/custom.el` に分離し、ローカルパッケージは `:load-path` を使って `elisp/` 配下から直接 `require` しています。`init-loader` は `eval-and-compile` の外に独立させ、`inits/` 配下のファイルをバイトコンパイルしながら順次読み込みます。
@@ -232,6 +232,7 @@ xrdb -merge ~/.Xresources
 
 ```code
 (leaf server
+  :commands server-running-p
   :hook (emacs-startup-hook
          . (lambda ()
              (unless (server-running-p)
@@ -266,21 +267,28 @@ alias eq="emacs -q -l ~/.emacs.d/init-mini.el"
 ### 3.1. 基本設定
 
 ```code
-(leaf *basic-configurations
-  :config
-  (setq-default bidi-display-reordering nil)    ;; 右→左言語の処理を省略（高速化）
-  (setq-default bidi-paragraph-direction 'left-to-right)
-  (setq make-backup-files nil)                  ;; バックアップファイルを作らない
-  (setq auto-save-default nil)                  ;; 自動保存を無効化
-  (setq create-lockfiles nil)                   ;; ロックファイルを作らない
-  (setq vc-follow-symlinks t)                   ;; シンボリックリンクを直接開く
-  (setq completion-ignore-case t)               ;; 補完で大文字小文字を区別しない
-  (setq scroll-preserve-screen-position t)      ;; スクロール時にカーソル位置を保持
-  (setq mouse-drag-copy-region t)               ;; マウス選択で自動コピー
-  (setq delete-by-moving-to-trash t)            ;; 削除ファイルをゴミ箱へ
-  (setq uniquify-buffer-name-style 'post-forward-angle-brackets)
-  (setq select-enable-clipboard t)
-  (defalias 'yes-or-no-p 'y-or-n-p))
+(setq-default bidi-display-reordering nil)        ;; 右→左言語の処理を省略（高速化）
+(setq-default bidi-paragraph-direction 'left-to-right)
+(setq-default cursor-in-non-selected-windows nil) ;; 非アクティブウィンドウのカーソルを非表示
+(setq make-backup-files nil)                      ;; バックアップファイルを作らない
+(setq auto-save-default nil)                      ;; 自動保存を無効化
+(setq auto-save-list-file-prefix nil)
+(setq create-lockfiles nil)                       ;; ロックファイルを作らない
+(setq vc-follow-symlinks t)                       ;; シンボリックリンクを直接開く
+(setq completion-ignore-case t)                   ;; 補完で大文字小文字を区別しない
+(setq read-file-name-completion-ignore-case t)
+(setq scroll-preserve-screen-position t)          ;; スクロール時にカーソル位置を保持
+(setq ring-bell-function 'ignore)                 ;; 警告音・フラッシュを無効化
+(setq visible-bell nil)
+(setq mouse-drag-copy-region t)                   ;; マウス選択で自動コピー
+(setq delete-by-moving-to-trash t)                ;; 削除ファイルをゴミ箱へ
+(setq require-final-newline t)                    ;; ファイル末尾の改行を保証
+(setq next-line-add-newlines nil)                 ;; バッファ末尾での新行追加を禁止
+(setq uniquify-buffer-name-style 'post-forward-angle-brackets)
+(setq select-enable-clipboard t)                  ;; X11 クリップボードを使用
+(set-fringe-mode 1)                               ;; フリンジを最小化
+(defalias 'yes-or-no-p 'y-or-n-p)
+(defalias 'my-exit 'save-buffers-kill-emacs)
 ```
 
 ### 3.2. 履歴・データファイルの一元管理
@@ -288,18 +296,27 @@ alias eq="emacs -q -l ~/.emacs.d/init-mini.el"
 各種履歴やキャッシュファイルをすべて `~/.emacs.d/tmp/` 配下に集約しています。
 
 ```code
+(setq auto-save-list-file-prefix  (locate-user-emacs-file "tmp/auto-save-list/.saves-"))
 (setq tramp-persistency-file-name (locate-user-emacs-file "tmp/tramp"))
 (setq transient-history-file      (locate-user-emacs-file "tmp/transient/history"))
 (setq project-list-file           (locate-user-emacs-file "tmp/projects"))
+(setq request-storage-directory   (locate-user-emacs-file "tmp/request"))
+(setq url-configuration-directory (locate-user-emacs-file "tmp/url"))
+(setq bookmark-default-file       (locate-user-emacs-file "tmp/bookmarks"))
+(setq save-place-file             (locate-user-emacs-file "tmp/places"))
 (setq savehist-file               (locate-user-emacs-file "tmp/history"))
 (setq recentf-save-file           (locate-user-emacs-file "tmp/recentf"))
-;; ...他も同様
+
+(setq savehist-additional-variables '(kill-ring))
+(setq history-delete-duplicates t)
 ```
 
 ### 3.3. 遅延モード有効化
 
 ```code
 (leaf *defer-modes
+  :mode (("\\.\\(?:z?shrc\\|bash_\\(?:profile\\|rc\\)\\|profile\\|zshenv\\|xprofile\\|Xmodmap\\)\\'" . sh-mode)
+         ("\\.\\(?:tmux\\.conf\\|muttrc\\)\\'" . conf-mode))
   :hook
   (after-init-hook . global-auto-revert-mode)
   (after-init-hook . save-place-mode)
@@ -308,22 +325,27 @@ alias eq="emacs -q -l ~/.emacs.d/init-mini.el"
   (prog-mode-hook  . goto-address-prog-mode))
 ```
 
+`.zshrc` / `.muttrc` などのシェル・設定ファイルを適切なメジャーモードで開きます。
+
 ### 3.4. キーバインドとユーザー関数
 
 ```code
 (leaf *user-configurations
-  :bind (("C-x C-c" . server-edit)      ;; 終了しない（サーバー編集終了）
+  :bind (("C-x C-c" . server-edit)
          ("C-x b"   . ibuffer)
          ("C-x m"   . neomutt)
+         ("M-,"     . xref-find-definitions)
          ("M-w"     . clipboard-kill-ring-save)
-         ("C-w"     . my:clipboard-kill-region)
+         ("C-w"     . my-clipboard-kill-region)
          ("M-/"     . kill-current-buffer)
          ("C-x /"   . delete-this-file)
+         ("s-c"     . clipboard-kill-ring-save)
+         ("s-v"     . clipboard-yank)
          ("C-q"     . other-window-or-split)
-         ([muhenkan] . my:keyboard-quit)))
+         ([muhenkan] . my-keyboard-quit)))
 ```
 
-`C-x C-c` は誤操作防止のため `server-edit` に変更しています。`delete-this-file` は現在編集中のファイルを確認後に削除してバッファも閉じます。
+`C-x C-c` は誤操作防止のため `server-edit` に変更しています。`M-,` を `xref-find-definitions` に、`s-c` / `s-v` でスーパーキーによるクリップボードコピー・ペーストを追加しています。`delete-this-file` は現在編集中のファイルを確認後に削除してバッファも閉じます。
 
 最後のフレームを閉じようとしたとき、削除せず最小化する `handle-delete-frame` の上書きも設定しています。
 
@@ -381,8 +403,6 @@ alias eq="emacs -q -l ~/.emacs.d/init-mini.el"
 hydra-magit: m)status  b)lame  c)heckout  l)og  g)itk  t)imemachine
 ```
 
-`gitk-open` 関数でカレントディレクトリの gitk を起動できます。
-
 ### 5.2. [diff-hl] 編集差分の視覚化
 
 ```code
@@ -393,8 +413,22 @@ hydra-magit: m)status  b)lame  c)heckout  l)og  g)itk  t)imemachine
 
 フレーム端に変更箇所をカラーで表示します。色は `custom-set-faces` で明示設定しています。`hydra-diff`（evil-leader の `h`）で hunk 間の移動・revert が行えます。
 
-### 5.3. その他
+### 5.3. [git-peek] コミット差分の高速プレビュー
 
+フォーク版（`minorugh/git-peek`）を `:vc` でインストールしています。
+
+```code
+(leaf git-peek
+  :vc (:url "https://github.com/minorugh/git-peek")
+  :commands (git-peek git-peek-emergency-quit))
+```
+
+セッション中にプレビューが残ってしまった場合に備え、`git-peek-emergency-quit` を定義しています。モードライン色の復元・dimmer の再有効化・バッファの強制削除を一括で行います。
+
+### 5.4. その他のユーティリティ
+
+* `gitk-open`：カレントディレクトリで gitk を起動
+* `my-tig`：gnome-terminal で tig を起動（リポジトリルートに自動移動）
 * `git-timemachine`：ファイルの git 履歴を時系列で閲覧
 * `browse-at-remote`：カーソル位置の GitHub ページをブラウザで開く
 
@@ -411,26 +445,43 @@ insert state は自動的に emacs state に変換します。これにより、
 (defalias 'evil-insert-state 'evil-emacs-state)
 ```
 
-`[muhenkan]` キーでどの state からでも normal state に戻れます。IME も自動的に OFF になります。
+`[muhenkan]` キーはどんな状況からでも脱出・切替できる万能キーです。`my-muhenkan` として以下の優先順で動作します。
 
 ```code
-(defun my:return-to-normal-state ()
+(defun my-muhenkan ()
   (interactive)
-  (when (use-region-p) (keyboard-escape-quit))
-  (when current-input-method (deactivate-input-method))
-  (evil-normal-state)
-  (message "-- NORMAL --"))
+  (cond
+   ((get-buffer "*git-peek-commits*") (git-peek-emergency-quit))
+   ((minibuffer-window-active-p (selected-window))
+    (minibuffer-keyboard-quit)
+    (when (minibuffer-window-active-p (selected-window))
+      (top-level)))
+   ((evil-normal-state-p) (evil-insert-state))
+   ((use-region-p) (deactivate-mark))
+   (current-input-method (deactivate-input-method))
+   (t (evil-normal-state) (message "-- NORMAL --"))))
 ```
+
+| 状況 | 動作 |
+|------|------|
+| git-peek 起動中 | 強制終了（`git-peek-emergency-quit`） |
+| ミニバッファ使用中 | `minibuffer-keyboard-quit`（失敗時は `top-level`） |
+| evil normal state | emacs/insert state へ切替 |
+| リージョン選択中 | 選択解除 |
+| 入力メソッド有効時 | 入力メソッドを無効化 |
+| それ以外 | evil normal state へ戻る |
 
 ### 6.2. キーバインド（normal state）
 
 | キー | コマンド |
 |------|---------|
+| `M-.` | nil（他用途のため無効化） |
 | `C-a` | seq-home（行頭→バッファ先頭） |
 | `C-e` | seq-end（行末→バッファ末尾） |
+| `C-w` | evil-delete-backward-word |
 | `SPC` | set-mark-command |
 | `_` | evil-visual-line |
-| `[muhenkan]` | evil-insert（emacs state） |
+| `[muhenkan]` | my-muhenkan |
 | `[home]` | dashboard-toggle |
 
 visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索、`d` でDeepL翻訳、`t` でGoogle翻訳が使えます。
@@ -450,6 +501,12 @@ visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索
 | `,,` / `,c` | org-capture |
 | `,SPC` | avy-goto-word-1 |
 | `,?` | vim cheat sheet |
+| `,.` | thunderbird |
+| `,n` | neomutt |
+| `,m` | make-frame |
+| `,_` | other-frame |
+| `,/` | delete-frame |
+| `,:` | thunar-open |
 
 ### 6.4. j/k の挙動
 
@@ -461,36 +518,32 @@ visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索
 ```
 
 
-## 7. 補完・スニペット
+## 7. 補完・検索
 
 ### 7.1. [counsel/ivy] 補完フレームワーク（04-counsel.el）
 
-`ivy` / `counsel` / `swiper` を使用しています。
+`ivy` / `counsel` を使用しています。
 
 ```code
 (leaf counsel :ensure t
   :hook (after-init-hook . ivy-mode)
   :bind (("C-:"     . counsel-switch-buffer)
+         ("C-x C-b" . counsel-switch-buffer)
          ("M-x"     . counsel-M-x)
          ("M-y"     . counsel-yank-pop)
+         ("M-:"     . counsel-buffer-or-recentf)
          ("C-,"     . counsel-mark-ring)
          ("s-a"     . counsel-ag)
+         ("C-x a"   . counsel-linux-app)
          ("C-x C-f" . counsel-find-file)
          ("C-x C-r" . counsel-recentf)))
 ```
 
-選択行には nerd-icons フォントのアイコンを表示しています。
+`C-x C-b` / `C-:` の両方を `counsel-switch-buffer` に、`M-:` を `counsel-buffer-or-recentf` に、`C-x a` を `counsel-linux-app` に割り当てています。選択行には独自のアロー表示を適用しています。
 
-#### 7.1.1. [migemo] 日本語インクリメンタル検索
+#### 7.1.1. counsel-ag の拡張
 
-`swiper` のみ `my:ivy-migemo-re-builder` を使い、ローマ字入力で日本語を検索できます。
-
-```code
-(setq ivy-re-builders-alist '((t . ivy--regex-plus)
-                              (swiper . my:ivy-migemo-re-builder)))
-```
-
-スペースは `.*?` に変換されるため、複数キーワードの柔軟な検索が可能です。
+カーソル位置の単語を初期入力として使用し、プレフィックスなしの場合はカレントディレクトリを検索対象とします。2文字以上で検索が起動します。アクション `r` で検索ディレクトリを変更できます。
 
 #### 7.1.2. [avy] ジャンプ
 
@@ -499,11 +552,56 @@ visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索
   :bind ("C-r" . avy-goto-word-1))
 ```
 
-#### 7.1.3. swiper の使い分け
+#### 7.1.3. [ivy-rich] リッチ表示
+
+```code
+(leaf ivy-rich :ensure t
+  :hook (after-init-hook . ivy-rich-mode))
+```
+
+#### 7.1.4. [amx] M-x 履歴強化
+
+```code
+(leaf amx :ensure t
+  :config
+  (setq amx-save-file (locate-user-emacs-file "tmp/amx-items"))
+  (setq amx-history-length 20))
+```
+
+`counsel-M-x` と連携し、使用頻度の高いコマンドを優先表示します。履歴は `tmp/amx-items` に永続化します。
+
+### 7.2. [swiper] インクリメンタル検索（05-swiper.el）
+
+```code
+(leaf swiper :ensure t
+  :bind (("C-s" . swiper-region)
+         ("s-s" . swiper-thing-at-point)))
+```
 
 `C-s` にバインドした `swiper-region` は、リージョン選択中は `swiper-thing-at-point`、非選択時は通常の `swiper` として機能します。
 
-### 7.2. [company] 自動補完（05-company.el）
+#### 7.2.1. [migemo] 日本語インクリメンタル検索
+
+```code
+(leaf migemo :ensure t
+  :hook (after-init-hook . migemo-init)
+  :config
+  (setq migemo-command "/usr/bin/cmigemo")
+  (setq migemo-options '("-q" "--emacs"))
+  (setq migemo-dictionary "/usr/share/cmigemo/utf-8/migemo-dict")
+  (setq migemo-coding-system 'utf-8-unix))
+```
+
+`swiper` のみ `my-ivy-migemo-re-builder` を使い、ローマ字入力で日本語を検索できます。
+
+```code
+(setq ivy-re-builders-alist '((t . ivy--regex-plus)
+                              (swiper . my-ivy-migemo-re-builder)))
+```
+
+スペースは `.*?` に変換されるため、複数キーワードの柔軟な検索が可能です。
+
+### 7.3. [company] 自動補完（05-company.el）
 
 ```code
 (leaf company :ensure t
@@ -514,11 +612,11 @@ visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索
 
 全バックエンドに yasnippet を自動付加する設定を入れています。
 
-### 7.3. [prescient] 補完候補の並び替え
+### 7.4. [prescient] 補完候補の並び替え
 
 `ivy-prescient` と `company-prescient` の両方を有効化し、使用頻度の高い候補を上位に表示します。履歴は `tmp/prescient-save` に永続化します。
 
-### 7.4. [yasnippet] スニペット
+### 7.5. [yasnippet] スニペット
 
 ```code
 (leaf yasnippet :ensure t
@@ -527,36 +625,32 @@ visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索
 ```
 
 
-## 8. 日本語入力（06-mozc.el）
+## 8. 日本語入力（07-mozc.el）
 
 ### 8.1. 基本設定
 
 ```code
 (leaf mozc :ensure t
-  :bind* ("<hiragana-katakana>" . my:toggle-input-method))
+  :bind* ("<hiragana-katakana>" . my-toggle-input-method)
+  :bind (("s-m" . my-mozc-config)
+         ("s-d" . my-mozc-word-regist)
+         (:mozc-mode-map
+          ("," . (lambda () (interactive) (mozc-insert-str "、")))
+          ("." . (lambda () (interactive) (mozc-insert-str "。"))))))
 ```
 
-`my:toggle-input-method` は、evil-mode が有効なときに `<hiragana-katakana>` で IME を切り替えると同時に `evil-emacs-state` に遷移します。
-
-句読点は mozc を介さず即時挿入します。
-
-```code
-(:mozc-mode-map
- ("," . (lambda () (interactive) (mozc-insert-str "、")))
- ("." . (lambda () (interactive) (mozc-insert-str "。"))))
-```
+`my-toggle-input-method` は、evil-mode が有効なときに `<hiragana-katakana>` で IME を切り替えると同時に `evil-insert-state` に遷移します。句読点は mozc を介さず即時挿入します。
 
 ### 8.2. mozc ツール起動
 
 | キー | 機能 |
 |------|------|
-| `s-m` | 設定ダイアログ |
-| `s-d` | 単語登録ダイアログ |
-| `s-t` | 辞書ツール |
+| `s-m` | 設定ダイアログ（`my-mozc-config`） |
+| `s-d` | 単語登録ダイアログ（`my-mozc-word-regist`） |
 
 ### 8.3. カーソル色による IME 状態表示
 
-`mozc-cursor-color`（自作パッケージ、`elisp/mozc-cursor-color/` 配下）でIMEのオン・オフをカーソル色で視覚的に示します。
+`mozc-cursor-color`（`minorugh/mozc-cursor-color`、`:vc` でインストール）で IME のオン・オフをカーソル色で視覚的に示します。
 
 ### 8.4. 候補表示
 
