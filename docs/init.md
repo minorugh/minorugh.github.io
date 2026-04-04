@@ -31,14 +31,12 @@ title: Emacs Configuration
 ~/.emacs.d
 │
 ├── elisp/                        ← ローカルパッケージ置き場
-│   ├── key-chord/
-│   ├── mozc-cursor-color/
-│   ├── sequential-command/
-│   ├── tempbuf/
-│   ├── deepl-translate/
-│   ├── howm-fix-code-comments.pl
-│   ├── gen_toc.pl
-│   └── markdown-css/
+│   ├── bin/
+│   ├── css/
+│   ├── my-github.el
+│   ├── my-markdown.el
+│   ├── my-template.el
+│   └── my-dired.el
 ├── elpa/
 ├── inits/
 │   ├── 00-base.el
@@ -140,12 +138,34 @@ title: Emacs Configuration
 
 ;; 最大化表示
 (push '(fullscreen . maximized) initial-frame-alist)
-
-;; テーマ読み込み前の背景色（doom-draculaに合わせる）
-(set-face-attribute 'default nil :background "#282c36" :foreground "#f8f8f2")
 ```
 
-テーマ読み込み前の一瞬の白背景を防ぐため、`early-init.el` でdoom-draculaと同じ背景色を設定しています。
+テーマ読み込み前の一瞬の白背景（フラッシュ）を防ぐため、背景色・前景色は `~/.Xresources` で X11 リソースレベルに設定しています。`early-init.el` ではなく起動前に適用されるため、より確実にフラッシュを抑制できます。
+
+#### 2.1.3. ~/.Xresources による X11 レベルの設定
+
+`early-init.el` が読み込まれる前に Emacs へ適用したい設定は `~/.Xresources` に記述しています。
+```
+!! Disable XIM when using Emacs
+Emacs*useXIM: false
+
+Xft.dpi: 120
+
+!! doom-dracula theme
+Emacs.background: #282c36
+Emacs.foreground: #f8f8f2
+```
+
+| 設定項目 | 内容 |
+|---------|------|
+| `Emacs*useXIM: false` | XIM（X Input Method）を無効化。Fcitx / IBus との競合・入力遅延を防ぐ |
+| `Xft.dpi: 120` | Xft 経由のフォントレンダリング DPI をモニターに合わせて指定 |
+| `Emacs.background / foreground` | テーマ読み込み前のフレーム初期色。白フラッシュを防ぐ |
+
+設定変更後は以下で反映します。
+```
+xrdb -merge ~/.Xresources
+```
 
 ### 2.2. [init.el] メイン初期化
 
