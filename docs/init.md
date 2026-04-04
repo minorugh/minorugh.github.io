@@ -47,11 +47,10 @@ title: Emacs Configuration
 │   ├── 05-swiper.el
 │   ├── 05-company.el
 │   ├── 07-mozc.el
-│   ├── 07-highlight.el
-│   ├── 08-dimmer.el
+│   ├── 08-highlight.el
 │   ├── 09-funcs.el
+│   ├── 10-check.el
 │   ├── 10-selected.el
-│   ├── 20-check.el
 │   ├── 20-edit.el
 │   ├── 30-ui.el
 │   ├── 30-utils.el
@@ -684,23 +683,22 @@ visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索
 `text-mode` では `electric-pair-local-mode` を無効化します（yasnippet との競合回避）。
 
 
-## 10. Dimmer（08-dimmer.el）
+## 10. Dimmer の代替：アクティブウィンドウのモードライン色強調（30-ui.el）
 
-非アクティブなウィンドウの輝度を落として、フォーカスを視覚的に明示します。
-
-ウィンドウ構成が変わった最初のタイミングで自動的に有効化し、それ以降はフックを外します。
-
-```code
-(defun my:dimmer-activate ()
-  (setq my:dimmer-enabled t)
-  (dimmer-mode 1)
-  (remove-hook 'window-configuration-change-hook #'my:dimmer-activate))
-(add-hook 'window-configuration-change-hook #'my:dimmer-activate)
+dimmer-mode の代わりに、分割時のアクティブウィンドウをモードライン色で視覚的に示す方式に変更しました。
+```elisp
+(defun my-update-modeline-color ()
+  "Highlight with mode line color when split, restore default when one window."
+  (if (or (one-window-p)
+          (bound-and-true-p hydra-curr-map)
+          (minibuffer-window-active-p (minibuffer-window))
+          (get-buffer-window "*compilation*"))
+      (set-face-attribute 'mode-line nil :background 'unspecified)
+    (set-face-attribute 'mode-line nil :background "#852941")))
+(add-hook 'window-configuration-change-hook #'my-update-modeline-color)
 ```
 
-`::` キーコードでトグルできます。minibuffer 出入り時と imenu-list 表示時は自動的に OFF になります。
-
-`dimmer-excludes` で which-key / magit / hydra / org との干渉を抑制しています。
+ウィンドウが分割されているときはアクティブウィンドウのモードラインを `#852941`（ワインレッド）に着色し、1ウィンドウ時・hydra 起動中・ミニバッファ使用中・compilation バッファ表示中はデフォルト色に戻します。
 
 
 ## 11. ユーティリティ関数（09-funcs.el）
