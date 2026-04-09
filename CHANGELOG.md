@@ -1,3 +1,37 @@
+## 2026-03-29
+
+# CHANGELOG-20260329.md
+
+## 2026-03-28
+
+### 解決した問題
+- `20-check.el` の `void-variable textlint` エラー修正
+  → `(leaf textlint ...)` を `with-eval-after-load` に書き換え
+
+### git-peek.el 開発
+- `my-git-show-file.el` をベースに開発開始
+- リアルタイムプレビュー実装（`advice-add` 方式）
+- `display-buffer-in-side-window` で上部固定表示
+- `git-peek-preview-height` 変数で高さ調整可能に
+- GitHub リポジトリ公開: https://github.com/minorugh/git-peek
+- Gitea への追加は後日
+
+### ~/.emacs.d/elisp/Makefile 改良
+- `toggle-elc` を `find` 再帰検索に変更
+- コンパイル後に `make compile` 自動実行
+- `compile` ターゲットを `update-directory-autoloads` に変更
+- サブディレクトリの autoload 登録に成功
+
+### 次回課題
+- 関数名を `git-peek` に統一、著作権ヘッダー追加
+- `git-peek-deleted`（削除済みファイル対象）実装
+- フルパス対応、diff 表示、コンテキスト判定
+- Qiita 記事最終仕上げ
+- `~/Dropbox/makefile` に git-peek リポジトリ追加
+- シンボリックリンク設定
+
+---
+
 ## 2026-03-28
 
 # CHANGELOG-20260328
