@@ -1,3 +1,253 @@
+## 2026-04-02
+
+## 2026-04-02
+
+### Fixed
+- `git-peek`: Fixed `Version` string (`1.0.3-trial2` → `1.0.3`) to comply with `package-vc` parser
+- `deepl-translate`: Fixed URL typo (`deeple-translate` → `deepl-translate`); replaced `ivy` with `request` in `Package-Requires`; added `;;;###autoload` to `deepl-ej` and `deepl-je`
+- `mozc-cursor-color`: Added `Version`, `Package-Requires` header; replaced `defadvice` with `advice-add`; bumped to `0.1.3`
+- `mozc-cand-posframe`: Added `Version` header; moved `add-to-list` into `with-eval-after-load 'mozc` to fix autoload failure
+- `key-chord`: Added missing `Version` header required by `package-vc`
+- `my-make-git`: Fixed `locate-dominating-file` search order (`makefile` before `Makefile`) to prevent parent directory `Makefile` from being picked up in subdirectories
+
+### Changed
+- Migrated `git-peek`, `deepl-translate`, `mozc-cursor-color`, `mozc-cand-posframe`, `key-chord` from `elisp/` to `:vc` managed packages
+- Replaced `dimmer` with modeline color highlighting using `window-configuration-change-hook`; handles `hydra-curr-map` and `minibuffer-window-active-p` to suppress color in hydra/minibuffer context
+- Simplified `makefile` (elisp dir): removed `@` prefix and joined commands for visible compile output in `compile` buffer; targets reduced to `toggle-elc` and `clean`
+- `init.el`: Replaced `normal-top-level-add-subdirs-to-load-path` with single `add-to-list` for `~/.emacs.d/elisp/`; moved `flycheck-emacs-lisp-load-path 'inherit` into `leaf flycheck :config`
+
+### Removed
+- `dimmer` package and `_08-dimmer.el`
+- `tempbuf` package
+- `my-loaddefs.el` generation from `Makefile`
+
+
+## `my-update-modeline-color`: `hydra-curr-map`、ミニバッファ、`*compilation*` バッファ表示時のモードライン色付けを抑止。`(get-buffer-window "*バッファ名*")` を `or` 条件に追加するパターンで他のケースにも応用可能
+
+---
+
+## 2026-04-01
+
+# CHANGELOG 2026-04-01
+
+## dotfiles git運用改善
+
+- サブ機（x250）からのgit pushを封鎖する仕組みを整備
+- `git remote set-url --push origin no-push` をx250で設定（`.git/config` に永続保存）
+- リストア用Makefileに `init-sub:` ターゲットを追加（hostname分岐でx250のみ実行）
+- dotfiles Makefileおよび各作業ディレクトリのMakefileの `git:` ターゲットをhostname分岐版に統一
+  - P1：commit + push
+  - x250：pull --rebase のみ
+- `HOSTNAME := $(shell hostname)` をMakefileの先頭（変数定義セクション）に移動・重複を削除
+- `baseinstall:` に `init-sub` を追加し `make all` で自動実行されるよう整備
+- magitを実運用から引退させ、Makefile + git-peek + gitk/tig 体制に完全移行
+
+## viewer.el 断捨離 → view-mode modeline色をインライン実装に置き換え
+
+- viewer.elを削除
+- view-mode時のmodeline背景色変更を独自コードで実装
+- `set-face-background` グローバル変更版を採用（doom-modeline環境では `face-remap-add-relative` が効かないため）
+- `defvar-local my-view-modeline-color-default nil` をleafブロック外のトップレベルに配置（flycheckのwarning解消）
+- view-mode終了時に `nil` をセットしてリセット漏れを防止
+- 他バッファーへの色漏れバグを修正
+
+## keyd導入・xmodmap廃止
+
+- PrtSc→Alt_R のキーマップ管理を xmodmap から keyd に移行
+- CapsLock→Ctrl は setxkbmap -option ctrl:nocaps で管理
+- [ろ] キーが _ になる原因判明：setxkbmap model が pc105（意図した動作）
+- .xprofile に setxkbmap -model pc105 -layout jp -option ctrl:nocaps を明示追記
+- xmodmap の記述をコメントアウト・廃止経緯をコメントに記載
+- .Xmodmap は参照用として残す（テンキー設定など将来の参考のため）
+
+## リストア用Makefile追加整備
+
+- `keymap:` ターゲットのコメントを実態に合わせて更新（xmodmap廃止・keyd + setxkbmap で管理）
+- `baseinstall:` に `keyd` を追加（keymap の直後）
+
+## Emacs keychain 自動リロード
+
+- Emacs起動時にkeychainの環境変数が引き継がれないケースがあった
+- 開発中のEmacs頻繁再起動時にSSHパスフレーズを求められる症状の原因
+- `after-init-hook` で `my-reload-keychain` を自動実行するよう設定
+- hydraメニューの手動リロードと合わせて二重の安全網
+
+## magit / diff-hl 断捨離
+
+- magit・diff-hl を完全削除（make git + git-peek + gitk/tig 体制に移行）
+- パッケージ削除：magit、diff-hl
+- 02-git.el を削除（browse-at-remote のみ 30-utils.el に移動）
+- 08-dimmer.el：`dimmer-configure-magit` 削除
+- 03-evil.el：`magit-blame-mode-hook` 削除
+- 40-hydra-dired.el：`my-magit-status` 関数削除
+- 30-utils.el：`magit-mode-hook` 削除
+- `git-peek-preview-height` 設定を 09-funcs.el に移動・コメント追記
+- 02-git.el の欠番は当面そのまま
+
+## elisp ディレクトリ構成の再整備
+
+### 背景と方針
+
+git-peek.el の開発が v1.0.3 で一段落したのを機に、`.emacs.d/elisp/` まわりの管理方式を見直した。
+
+これまでのシンボリックリンク方式や `my-loaddefs.el` を自動生成してロードする方式は、動作はするものの安定性に欠け、設定ファイルを見てもパッケージの出どころが追いにくかった。
+
+### 新しい方針
+
+- **自作パッケージ群**（git-peek.el 等）は各自の GitHub リポジトリに置き、`leaf` の `:vc` 機能で読み込む方式に統一する。`:vc` で取得したパッケージは `.emacs.d/elpa/` に保存され、MELPA パッケージと同様に管理でき、byte-compile も自動で行われる。
+
+- **ごく私的なテンプレート的 Lisp**（`my-template.el` 等）は `.emacs.d/elisp/` の直下に置き、`load-path` を通して直接読み込む。
+
+- **Emacs から使う補助 Perl スクリプト群**は `.emacs.d/elisp/lib/` に置き、スクリプト内でフルパスを指定して呼び出す。
+
+### ディレクトリ構成
+
+```
+.emacs.d/elisp/
+├── my-template.el      # ごく私的なもの、load-path直読み
+├── my-dired.el
+├── ...
+└── lib/                # Perl補助スクリプト群
+    ├── howm-fix-code-comments.pl
+    └── ...
+```
+
+### メリット
+
+初回セットアップ時に `:vc` でのダウンロードが発生するが、以降は `elpa/` に保存されたものを参照するだけなので起動時間への影響は実質ない。何より leaf の設定ブロックにパッケージの出どころと設定が明示的に残るため、あとから見返したときにわかりやすい。
+
+# Emacs dotfiles トラブル対応メモ
+作成日: 2026-04-01
+
+---
+
+## 発端
+
+`~/src/github.com/minorugh/` に置いていた古いMakefileを誤って実行。
+そのMakefileのREPOSリストに既存のgit管理済みリポジトリ（GH, minorugh.com, git-peek, gpgimport, dotfiles）が含まれたまま `git add -A && git commit && git push` が全リポジトリに対して走ってしまった。
+
+---
+
+## 対応済み
+
+### 1. dotfiles の復旧
+`git diff --stat` で変更ファイルを確認後、コミット前だったので以下で復旧：
+```bash
+git checkout -- .
+```
+
+対象ファイル：
+- `.../elisp/mozc-cursor-color/mozc-cursor-color.el`（削除されていた）
+- `.emacs.d/inits/00-base.el`
+- `.emacs.d/inits/30-ui.el`
+- `.emacs.d/inits/50-dired.el`
+
+### 2. GH リポジトリの復旧
+同様に `git checkout -- .` で復旧。大量の画像・HTMLファイルが削除されていた。
+
+### 3. 他リポジトリの確認
+minorugh.com / git-peek / gpgimport / dotfiles はいずれも今日の不審なコミットなし。被害なし。
+
+### 4. Makefile 構成の刷新
+一括gitの誤爆防止のため、以下の構成に変更：
+
+**各リポジトリ共通 Makefile**（upsftp, mozc-cursor-color, vim-cheat, deeple-translate, key-chord, tempbuf, sequential-command の7リポジトリに配置）：
+```makefile
+.PHONY: git
+
+git:
+	@DATE=$$(date +"%Y-%m-%d %H:%M:%S"); \
+	git add -A && \
+	git diff --cached --quiet || git commit -m "auto: $$DATE"; \
+	git push || true
+```
+
+**ルート Makefile**（`~/src/github.com/minorugh/Makefile`）：
+```makefile
+REPOS := upsftp mozc-cursor-color vim-cheat \
+         deeple-translate key-chord tempbuf sequential-command
+
+BASE := $(HOME)/src/github.com/minorugh
+
+.PHONY: git
+
+git:
+	@for repo in $(REPOS); do \
+	  echo "=== $$repo ==="; \
+	  $(MAKE) -C $(BASE)/$$repo git; \
+	  echo ""; \
+	done; \
+	echo "All done."
+```
+
+### 5. sequential-command の URL タイポ修正
+`06-mozc.el` ではなく `init.el` or inits 内の leaf ブロックで：
+```elisp
+;; 誤
+:vc (:url "https://github.com/minorugh/equential-command")
+;; 正
+:vc (:url "https://github.com/minorugh/sequential-command")
+```
+
+---
+
+## 未解決：Emacs 起動時のエラー
+
+### 症状
+```
+custom-initialize-reset: Symbol's value as variable is void: [文字化け \213]
+```
+- evil-mode が `after-init-hook` で自動起動しない（手動 `M-x evil-mode` では動く）
+- 全 inits ファイルのロード完了後にエラーが出る
+
+### 原因の絞り込み結果
+二分探索により **`06-mozc.el` が犯人** と確定。
+
+`06-mozc.el` を無効化すると：
+- エラーメッセージが消える
+- evil-mode が正常に自動起動する
+
+### `06-mozc.el` の状況
+- `.el` ファイル自体に非ASCII文字は含まれていない（`grep -P "[\x80-\xFF]"` で確認済み）
+- `.elc` バイトコンパイル済みファイルには非ASCII文字が検出される（ただし毎回再生成されるため削除しても再発）
+- `mozc-cursor-color` は `:vc` をコメントアウトし、`~/.emacs.d/elisp/` に実ファイルを置く運用
+
+### 調査の仮説
+- `\213` はCP1252（Windows系）の文字コードに見える
+- `mozc-leim-title "あ"` などの日本語文字列が関係している可能性
+- `mozc-cursor-color` の `:hook (after-init-hook . mozc-cursor-color-setup)` が evil の after-init-hook と干渉している可能性
+
+### 原因の詳細判明
+`mozc-cursor-color` の leaf ブロック内の `:hook (after-init-hook . mozc-cursor-color-setup)` をコメントアウトしたらエラーが消えた。
+
+`~/.emacs.d/elisp/mozc-cursor-color.el` が壊れている可能性が高い。
+
+**経緯：**
+- 元々パッケージのアーカイブから `mozc-cursor-color.el.gz` を取り出して `elisp/` に置いていた
+- Emacsは `.el.gz` のままload-pathが通っていれば読み込める
+- 今回の操作ミスの影響で `.gz` を削除してリネームし `.el` として置いてしまった
+- バイナリのgzipファイルを `.el` として扱ったため壊れた
+
+### 次のステップ
+1. `~/.emacs.d/elisp/mozc-cursor-color.el` を削除
+2. GitHubから正規の `.el.gz` を取得してそのまま `elisp/` に置く（リネームしない）
+   ```bash
+   cp mozc-cursor-color.el.gz ~/.emacs.d/elisp/
+   ```
+3. `06-mozc.el` の `mozc-cursor-color` ブロックのコメントアウトを元に戻して再起動確認
+
+---
+
+## 環境メモ
+
+- dotfiles: `~/src/github.com/minorugh/dotfiles`
+- inits: `~/.emacs.d/inits/` （init-loader で読み込み）
+- elisp: `~/.emacs.d/elisp/` （load-path 設定済み）
+- GH / minorugh.com の実ファイルは Dropbox 以下にあり、`.git` のみ `~/src/github.com/minorugh/` に置く運用
+- git credential helper が `wincred`（Windows用）になっていたため `store` に変更済み
+
+---
+
 ## 2026-03-29
 
 # CHANGELOG-20260329.md
