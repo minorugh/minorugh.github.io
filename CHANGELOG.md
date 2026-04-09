@@ -1,3 +1,148 @@
+## 2026-03-28
+
+# CHANGELOG-20260328
+
+## my-git-show-file.el 開発ログ
+
+### 概要
+git 管理下の過去ファイルを ivy で検索・プレビュー・保存するツールを改良。
+
+### 改良内容
+
+#### 1. リアルタイムプレビュー実装
+- `ivy-next-line` / `ivy-previous-line` に `advice-add` でフック
+- カーソル移動のたびに `git show` でファイル内容を取得して `*git-preview*` バッファを更新
+- `:update-fn` / `ivy-update-fns-alist` は今回のケースでは効かなかった（カーソル移動では発火しない）
+- `advice-add` 方式が確実と判明
+
+#### 2. プレビューウィンドウの表示改善
+- `display-buffer-reuse-window` → `display-buffer-in-side-window` に変更
+- `side . top` で画面上部に固定表示
+- 高さを `my-git-show-file-preview-height` 変数で調整可能に
+```elisp
+(defvar my-git-show-file-preview-height 0.8
+  "Height ratio of preview window (0.0-1.0).")
+```
+
+| 値    | 用途                                            |
+|-------|-------------------------------------------------|
+| `1.0` | ほぼ全画面（dired 等から使うとき）              |
+| `0.8` | デフォルト（汎用）                              |
+| `0.5` | 上下分割（現在ファイルと過去版を対比したいとき）|
+
+#### 3. RET 後のクリーンアップ
+- `:action` 内で `my-git-show-file--active` を `nil` に戻す
+- `*git-preview*` バッファを `kill-buffer` で自動削除
+
+### ファイル配置
+```
+~/.emacs.d/elisp/my-git-show-file/my-git-show-file.el
+~/.emacs.d/elisp/my-git-show-file/README.md
+```
+
+### 次回検討事項
+- 現在バッファでファイルを開いている場合、`buffer-file-name` + `:preselect` で
+  ファイル選択を自動的に当該ファイル名にプリセット
+- dired の場合、`dired-get-filename` でカーソル下のファイル名をプリセット
+- 起動時にコンテキスト（通常バッファ／dired）を判定して分岐する実装
+- まとめてリクエスト予定
+
+
+## ~/.emacs.d/elisp/ Makefile 改良
+
+### 背景
+`~/.emacs.d/elisp/` 配下にサブディレクトリ形式のパッケージが混在する構成。
+`normal-top-level-add-subdirs-to-load-path` で全サブディレクトリを load-path に追加。
+`my-loaddefs.el` で `;;;###autoload` を一括管理。
+
+### 変更内容
+
+#### toggle-elc の改善
+- `ls *.elc` → `find` による再帰検索に変更（サブディレクトリの .elc も対象）
+- elc 削除時に `my-loaddefs.el` を消さないよう修正
+- コンパイル後に `$(MAKE) compile` を自動実行（loaddefs 再生成まで一発完了）
+
+#### compile の改善
+- `loaddefs-generate` の第6引数に `t` を追加（サブディレクトリを再帰的に処理）
+
+### 操作まとめ
+| コマンド       | 動作                                      |
+|----------------|-------------------------------------------|
+| `make`         | elc がなければコンパイル → loaddefs 再生成 |
+| `make`（2回目）| elc があれば削除（loaddefs は残る）        |
+| `make compile` | loaddefs のみ再生成                        |
+
+### git-show-file ディレクトリへの移行手順
+```bash
+mv ~/.emacs.d/elisp/my-git-show-file.el ~/.emacs.d/elisp/git-show-file/
+# README.md も配置後
+cd ~/.emacs.d/elisp && make
+```
+`my-loaddefs.el` に `my-git-show-file` のエントリが生成されていれば完了。
+
+## ~/.emacs.d/elisp/Makefile compile ターゲット最終解決
+
+### 問題
+`loaddefs-generate` はサブディレクトリの `.el` を再帰的に処理できなかった。
+（第6引数の再帰フラグ、`directory-files-recursively` 経由など複数の方法を試したが全滅）
+
+### 原因
+- `.elc` が存在すると `loaddefs-generate` がスキップする仕様
+- 出力先と同ディレクトリのファイルをスキップする挙動も確認
+
+### 解決
+`update-directory-autoloads` に切り替えで解決。
+deprecated 警告は出るが Emacs 30.1 でも正常動作する。
+
+### 最終的な compile ターゲット
+```makefile
+compile:
+	$(EMACS) --batch -Q \
+	  --eval "(require 'autoload)" \
+	  --eval "(let ((generated-autoload-file \"$(LOADDEFS)\")) \
+	    (update-directory-autoloads \"$(ELISP_DIR)\"))" \
+	  --eval "(message \"Done: %s\" \"$(LOADDEFS)\")"
+```
+
+### 確認済み
+`my-loaddefs.el` に `git-show-file/my-git-show-file` のエントリが正常登録された。
+
+
+## 本日の開発まとめ
+
+### 解決した問題
+1. `20-check.el` の `void-variable textlint` エラー
+   → `(leaf textlint ...)` を `with-eval-after-load` に書き換え
+
+2. `my-git-show-file.el` リアルタイムプレビュー実装
+   → `advice-add` で `ivy-next-line` / `ivy-previous-line` にフック
+   → `display-buffer-in-side-window` で上部固定表示
+   → `my-git-show-file-preview-height` 変数で高さ調整可能
+
+3. `~/.emacs.d/elisp/Makefile` 改良
+   → `toggle-elc` を `find` 再帰検索に変更
+   → コンパイル後に `make compile` 自動実行
+   → `compile` ターゲットを `update-directory-autoloads` に変更
+   → サブディレクトリ `git-show-file/` の autoload 登録に成功
+
+### 成果物
+- `~/.emacs.d/elisp/git-show-file/my-git-show-file.el`
+- `~/.emacs.d/elisp/git-show-file/README.md`
+- `~/.emacs.d/elisp/Makefile`
+- `qiita-git-as-storage.md`（Qiita 記事バージョンアップ版）
+
+### 次への課題（未着手）
+- diff 表示対応（現在版と過去版の差分をプレビューに表示）
+- フルパス対応（`index.html` 等同名ファイルが複数ディレクトリに存在する場合）
+- コンテキスト判定（現在バッファのファイル名を自動プリセット、dired では
+  カーソル下ファイルをプリセット）
+- Qiita 記事最終仕上げ（タイムスタンプ自動挿入 `my:magit-insert-timestamp` を組み込む）
+- my-git-show-file.elは初期の命名、ここまで進化してきたのでgit-peek.el に変更し単独リポジトリで公開したい。
+- 著作権は、発案者（私）とclaude（コード生成）との共著であることをヘッダに書く
+;; Copyright (C) 2026 Minoru Yamada and Claude (Anthropic)
+
+---
+
 ## 2026-03-27
 
 # CHANGELOG-20260327
