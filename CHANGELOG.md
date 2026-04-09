@@ -1,6 +1,564 @@
-## 2026-04-02
+## 2026-04-09
+
+# Changelog — 2026-04-09
+
+## my-makefile.el
+
+### 機能完成
+- `my-make--find-makefile` — dired / Makefile直開き / default-directory の3way検出
+- `my-make--targets-with-desc` — ターゲット一覧取得＋`## comment`で説明文抽出
+- `my-make--format-candidate` — ivy候補整形（ターゲット名＋説明文を色分け表示）
+- `my-make-ivy` — ivyで選択 → `compile` 実行（`###autoload`）
+
+### 変更
+- `switch-to-buffer-other-window "*compilation*"` を削除
+  - compilationバッファの表示・消去は `compile-autoclose` に委譲
+- `my-make--targets-with-desc` を `make -qp` 廃止、Makefile直接パース一本化
+  - ターゲット表示順がMakefile記載順に一致するよう修正
+- `:action` から `my-make-ivy-called` フラグのセット処理を削除
+  - フラグ自体が不要になったため
+
+## 09-funcs.el
+
+### compile-autoclose 変更
+- `(delete-other-windows)` をマスキング
+- `run-at-time` で1秒後に自動で `delete-windows-on`
+  - カーソル移動不要でcompilationウィンドウが静かに消える
+- `kill-buffer` を削除 — バッファは残し、次回コンパイルで上書き
+  - 必要なら `M-x switch-to-buffer` でいつでも再確認可能
+- `my-make-ivy-called` フラグ（`defvar` および分岐ロジック）を削除
+  - どのケースでも成功時は一律1秒後にクローズと割り切り、シンプル化
+  - エラー時（`"finished"` 以外）はウィンドウをそのまま残す動作は従来通り
+
+### leaf *my-makefile 追加設定
+- `makefile-mode-hook` / `dired-mode-hook` に `setq-local ivy-sort-functions-alist '((t . nil))` を追加
+  - `my-make-ivy` の候補ソートを無効化（他のivyに影響しない）
+
+---
+
+## 2026-04-08
+
+# CHANGELOG 2026-04-08
+
+## 概要
+
+`my-dired.el` 廃止を軸に、elisp 設定ファイルの断捨離・統合・require の整理を実施。
+「`my-xxx.el` は、それを使う inits ファイルの末尾で `require` する」ルールを確立。
+`init.el` はロードパスを通すだけのシンプルな構造に変更。
+
+---
+
+## 対象ファイル一覧
+
+| ファイル | 変更種別 |
+|---|---|
+| `my-dired.el` | **廃止**（実機で削除） |
+| `init.el` | 修正 |
+| `40-hydra-dired.el` | 修正 |
+| `40-hydra-menu.el` | 修正 |
+| `60-markdown.el` | 修正 |
+| `my-template.el` | 修正 |
+| `my-markdown.el` | 変更なし |
+
+---
+
+## 詳細変更ログ
+
+### my-dired.el → 廃止
+
+#### 廃止の根拠
+
+全関数がすでに `40-hydra-menu.el` へ移行済みであることが判明。
+
+| 関数 | 移行先 |
+|---|---|
+| `my-year` | `40-hydra-menu.el` `:init` に defun 済み |
+| `my-year-draft` | `40-hydra-menu.el` `:init` に defun 済み |
+| `my-m_kukai` | `40-hydra-menu.el` `:init` に defun 済み |
+| `my-d_kukai` | `hydra-work` `"m"` キーにインライン済み |
+| `my-w_kukai` | `hydra-work` `"w"` キーにインライン済み |
+| `my-teirei` | `hydra-work` `"t"` キーにインライン済み |
+| `my-swan` | `hydra-work` `"s"` キーにインライン済み |
+| `my-kinnei` | `hydra-work` `"K"` キーにインライン済み |
+| `my-kinnei-draft` | `hydra-work` `"k"` キーにインライン済み |
+| `my-dselext` | `hydra-work` `"f"` キーにインライン済み |
+| `my-tselext` | 未移行 → 今回 `40-hydra-dired.el` に追加 |
+| `my-tpdia` | 未移行 → 今回 `40-hydra-dired.el` に追加 |
+
+#### 実機作業（手動）
+
+```bash
+rm ~/.emacs.d/elisp/my-dired.el
+```
+
+---
+
+### init.el
+
+#### 変更前
+
+```emacs-lisp
+;; Load local elisp packages from the elisp directory.
+(leaf *load-my-packages
+  :load-path "~/.emacs.d/elisp"
+  :require (my-dired my-markdown my-template))
+```
+
+#### 変更後
+
+```emacs-lisp
+;; Add local elisp directory to load-path.
+(leaf *load-my-packages
+  :load-path "~/.emacs.d/elisp")
+```
+
+#### 理由
+
+- `my-dired` → 廃止につき削除
+- `my-template` → `40-hydra-dired.el` / `40-hydra-menu.el` 末尾で `require` するため不要
+- `my-markdown` → `60-markdown.el` 末尾で `require` するため不要
+- `:require` がなくなるので `:load-path` だけのシンプルな構造に。コメントも合わせて修正
+
+---
+
+### 40-hydra-dired.el
+
+#### 変更点 1：未移行だった2関数をキー追加
+
+```emacs-lisp
+("T" (my-open "~/Dropbox/GH/tselext/select.txt" 'top))
+("P" (my-open "~/Dropbox/GH/tpdia/dia.txt" 'top))
+```
+
+- `"T"` → `my-tselext` 相当（tselext/select.txt をトップから開く）
+- `"P"` → `my-tpdia` 相当（tpdia/dia.txt をトップから開く）
+- `my-tpdia-new-post`（テンプレ挿入版）は `my-template.el` に存続
+
+#### 変更点 2：`require` 追加
+
+```emacs-lisp
+(require 'my-template)
+```
+
+---
+
+### 40-hydra-menu.el
+
+#### 変更点 1：死にコード削除
+
+`my-open-kendai` / `my-open-marquee` の2関数を削除。
+hydra のどのキーにも割り当てられておらず、`interactive` 宣言もないため完全に未使用。
+
+```emacs-lisp
+;; 削除した関数（キー未割当の死にコード）
+(defun my-open-kendai () ...)
+(defun my-open-marquee () ...)
+```
+
+#### 変更点 2：`require` 追加
+
+```emacs-lisp
+(require 'my-template)
+```
+
+---
+
+### 60-markdown.el
+
+#### 変更点：`require` 追加
+
+```emacs-lisp
+(require 'my-markdown)
+```
+
+Commentary にも記載があった通り `my-markdown.el` の関数
+（`my-howm-fix-code-comments` / `gen-toc-term`）を使う側のファイルで明示的に require。
+
+---
+
+### my-template.el
+
+#### 変更点 1：`perl-mode-hook` を除去
+
+テンプレート設定と無関係な hook が混入していたため削除。
+（移動先は別途 perl 設定ファイルへ）
+
+```emacs-lisp
+;; 削除
+(add-hook 'perl-mode-hook
+          (lambda ()
+            (when (and buffer-file-name
+                       (string-match-p "[dswm]member\\.cgi\\'" buffer-file-name))
+              (conf-mode)
+              (display-line-numbers-mode 1))))
+```
+
+#### 変更点 2：Commentary 更新
+
+```emacs-lisp
+;; 変更前
+;; Loaded via (require 'my-template) in 40-hydra-menu.el
+
+;; 変更後
+;; Loaded via (require 'my-template) in 40-hydra-dired.el and 40-hydra-menu.el
+```
+
+---
+
+## 確立したルール
+
+```
+my-xxx.el は、それを使う inits ファイルや設定ファイルの末尾で require する。
+init.el はロードパス（load-path）を通すだけ。
+```
+
+| my-xxx.el | require する場所 |
+|---|---|
+| `my-template.el` | `40-hydra-dired.el` / `40-hydra-menu.el` |
+| `my-markdown.el` | `60-markdown.el` |
+| `my-dired.el` | 廃止 |
+
+---
+
+## 残課題・未確認事項
+
+| 項目 | 内容 |
+|---|---|
+| `my-dired.el` 実機削除 | `rm ~/.emacs.d/elisp/my-dired.el` を手動で実施 |
+| バイトコンパイル確認 | 全 inits ファイルを再コンパイルして警告・エラーがないか確認 |
+| `my-tselext` / `my-tpdia` のキー確認 | `"T"` / `"P"` が hydra-dired のヒント行に未反映。必要なら hint 文字列を更新 |
+| `perl-mode-hook` の移動先 | 削除したが移動先（perl 専用設定ファイル）への記述はまだ |
+| `my-apvoice` defun（40-hydra-menu.el L107） | `my-open` のラッパーだが hydra キーには直接インライン済み。defun 自体が未使用の可能性あり→次回確認 |
+
+2026-04-08 — my-makefile.el + 09-funcs.el 作業
+
+compile-autoclose で @echo 出力をミニバッファ表示を試みたが未解決
+my-make-ivy の switch-to-buffer-other-window は現状維持
+次回：compile-autoclose の末尾行パース改善から再開
+
+---
+
+## 2026-04-07
+
+# CHANGELOG 2026-04-07
+
+## xsrv-backup.sh
+
+- ログ出力を autobackup スタイルに統一
+  - 正常時は1行サマリーのみ（rsync詳細は非表示）
+  - エラー時は詳細を展開出力
+  - `LOG_PREFIX` / `TMPLOG` / `ERRORS` / `log()` / `run_rsync()` / `run_git()` を導入
+  - START / END (OK) / END (ERRORS=N) 形式に統一
+
+## xsrv-backup.service
+
+- `ExecStart` のリダイレクト（`>>`）を削除し `StandardOutput` / `StandardError` に一本化
+- ログモードを `append` → `truncate` に変更（3時間毎の上書き運用）
+
+## xsrv-backup.timer
+
+- 問題なし（変更なし）
+
+## Makefile (cron/)
+
+- `reload` ターゲットを追加（`systemctl --user daemon-reload`）
+
+---
+
+## 2026-04-06
+
+# CHANGELOG - 2026-04-06
+
+## automakelist.pl バグ修正
+
+### 問題
+- Step3（削除ルーチン）が除外ディレクトリ・除外ファイルパターンを無視していた
+- `common/`, `zc/` など除外ディレクトリのエントリがリストから削除されなかった
+- `index_new.html` がハードコードされていて拡張性がなかった
+
+### 修正内容
+- `$exclude_files` 変数（正規表現）を新設し、除外ファイルパターンを一元管理
+- Step2（スキャン）とStep3（削除チェック）の両方に `$exclude_files` を適用
+- Step3に除外ディレクトリ判定を追加（`$exclude_dirs{$top}` チェック）
+- 削除理由をログに出力（`exclude dir` / `exclude file` / `not found`）
+- `$exclude_files` の使い方コメントを詳しく記載（複数パターンの書き方など）
+
+### 対象ファイル
+- `~/Dropbox/GH/upsftp/automakelist.pl`
+
+---
+
+## filelist.cvs クリーニング
+
+### 問題
+- automakelist.pl のバグにより、除外ディレクトリ（`common/`, `zc/`, `d_kukai/` 等）の
+  エントリが filelist.cvs に残存していた
+
+### 対応
+- Perlスクリプトで除外ディレクトリのエントリを一括削除
+- 削除: 1,654行 / 残存: 2,492行
+
+---
+
+## xsrv バックアップ環境の構築
+
+### 背景
+- automakelist.pl のバグにより xserver の重要ファイルがローカルのものに上書きされる事故が発生
+- xserver → ローカルへの定期バックアップ + git管理の仕組みが必要と判断
+
+### 構成
+
+```
+①  ~/Dropbox/GH/ ──upsftp──→ xserver (web公開・通常運用)
+                                  ↓
+②③  rsync + git commit + push (07:00〜22:00 2時間ごと) ↙
+   ~/src/github.com/minorugh/xsrv-GH/
+   ~/src/github.com/minorugh/xsrv-minorugh/
+                    ↓
+          git push (2時間ごと自動)
+           ↙          ↘
+      GitHub          xserver/git/（将来追加予定）
+    (private)
+```
+
+### 新規作成・変更ファイル
+
+#### `~/src/github.com/minorugh/dotfiles/cron/xsrv-backup.sh`（新規）
+- xserver 2ドメイン分を rsync + git commit + push を一括実行
+- rsync に `--exclude='.git' --exclude='.gitignore'` を指定（ローカルの `.git` `.gitignore` を保護）
+- rsync 失敗時は `exit 1` で止まり commit は走らない
+- 緊急時はcrontabの1行をコメントアウトするだけで停止できる
+- cron: `0 7-22/2 * * *`（07:00〜22:00、2時間ごと）
+
+#### `~/Dropbox/Makefile`（追記）
+- `xsrv-reset` ターゲットのみ追加（`xsrv-backup` ターゲットは作らない）
+- commitログがうざくなったら手動実行: `make -f ~/Dropbox/Makefile xsrv-reset`
+- 両リポジトリの履歴を1件にリセットしてforce push（ファイルは消えない）
+
+#### `~/src/github.com/minorugh/dotfiles/Makefile`（修正）
+- `autobackup` ターゲットの `xsrv-backup.sh` を `ln -vsfn` に修正
+- `github` ターゲットに `xsrv-GH` と `xsrv-minorugh` のcloneを追加
+
+#### crontab（最終形）
+```
+# xserver rsync + git backup（07:00〜22:00、2時間ごと）
+0 7-22/2 * * * /usr/local/bin/xsrv-backup.sh >> /tmp/xsrv-backup.log 2>&1
+```
+
+### GitHub リポジトリ（新規作成・private）
+- `git@github.com:minorugh/xsrv-GH.git`
+- `git@github.com:minorugh/xsrv-minorugh.git`
+
+### .gitignore（xsrv-GH）
+- `doc/`, `img/`, `topimg/`, `zc/` を除外
+- `*.jpg`, `*.jpeg`, `*.gif`, `*.png`（大小文字両方）を除外
+- ローカルには全ファイルをrsyncで保持、git管理のみ除外
+
+### 動作確認済み
+- `xsrv-backup.sh` 手動実行 → rsync + git commit + push 両ドメイン成功
+- `.gitignore` と `.git` を rsync 除外対象に指定し保護
+
+### commitログ肥大化対策（解決済み）
+- 自動削除は採用せず `xsrv-reset` ターゲットを手動実行する方針に決定
+- うざくなったタイミングで `make -f ~/Dropbox/Makefile xsrv-reset` を実行するだけでOK
+
+---
+
+## 2026-04-04
+
+# CHANGELOG-20260404
+
+# Makefile革命 作業ログ 2026-04-04
+
+## 発端
+- `rule.mak` をEmacsで開くと `makefile-mode` が適用され `ifeq`/`else`/`endif` に色が付かない
+- leaf の `:mode` 設定では `makefile-gmake-mode` を指定しているのに効かない
+
+## 原因
+`auto-mode-alist` に `("\\.mak\\'" . makefile-mode)` が後から割り込んでいた
+```emacs-lisp
+;; 確認コマンド（*scratch*でC-j）
+(seq-filter (lambda (x) (string-match "mak" (car x))) auto-mode-alist)
+```
+
+## 最終解決策
+`.mak` → `.mk` にリネームすることで根本解決  
+（`.mk` は組み込みの `makefile-mode` エントリがなく leaf 設定がそのまま効く）
+
+---
+
+## 作業内容
+
+### 1. rule.mak → rule.mk 一括リネーム・参照書き換え
+```bash
+# リネーム
+find ~/Dropbox/GH -name "rule.mak" | while read f; do
+  mv "$f" "${f%.mak}.mk"
+done
+# include参照を一括書き換え
+grep -rl "rule\.mak" ~/Dropbox/GH | xargs sed -i 's/rule\.mak/rule.mk/g'
+# 確認（両方0になればOK）
+find ~/Dropbox/GH -name "rule.mak" | wc -l
+grep -rl "rule\.mak" ~/Dropbox/GH | wc -l
+```
+
+---
+
+### 2. rename_makefiles.sh 実行
+- `makefile` → `Makefile` リネーム（84箇所）
+- `common/rule.mk` 更新（gitターゲット追加、automakelistfile.pl参照など）
+- ルート `Makefile` を rule.mk 直書き版に更新・`rule.mk` 削除
+- `common/automakefile.pl` 更新
+
+```bash
+cd ~/Dropbox/GH && bash rename_makefiles.sh
+```
+
+---
+
+### 3. cleanup_tex_upsftp.sh 実行
+- `d_select/tex/` `w_select/tex/` `s_select/tex/` `m_select/tex/` のMakefileにrule.mkを直書き・rule.mk削除
+- `upsftp/Makefile` にrule.mkを直書き・rule.mk削除
+- `common/automaketex.pl` 更新
+
+```bash
+cd ~/Dropbox/GH && bash cleanup_tex_upsftp.sh
+# chmodエラーが出た場合は手動で
+chmod 755 ~/Dropbox/GH/common/automaketex.pl
+```
+
+---
+
+### 4. automakelistfile.pl → automakelist.pl に統一
+
+#### 経緯
+- 旧名: `autolistfile.pl` → `automakelistfile.pl` に既にリネーム済み
+- 新汎用版: `automakelist.pl`（実行パス自動判定版）
+- `common/` に配置して各所から絶対パスで参照
+
+#### automakelist.pl の内容
+```perl
+#!/usr/bin/perl
+#########################################
+## automakelist.pl
+## auto update listfile.txt for upsftp
+## create 2026.02.16 by minoru yamada.
+## 2026.04 GHルート版と統合、実行パス自動判定
+########################################
+use strict;
+use warnings;
+use File::Basename;
+use Cwd;
+
+## 実行場所を自動判定してターゲットディレクトリを決める
+## GHルートから実行 → '.'
+## common/ から実行  → '..'
+my $cwd = cwd();
+my $target_dir = (basename($cwd) eq 'common') ? '..' : '.';
+
+## 設定
+my $list_file = "$target_dir/upsftp/filelist.cvs";
+my $extension = '.html';
+
+# 既存リストから第一項目を読み込む
+my %existing_files;
+if (-e $list_file) {
+    open(my $fh, '<', $list_file) or die "Cannot open $list_file: $!";
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($first_col) = split(',', $line);
+        $existing_files{$first_col} = 1 if $first_col;
+    }
+    close($fh);
+}
+
+# ディレクトリ内の .html ファイルを取得
+opendir(my $dh, $target_dir) or die "Cannot open $target_dir: $!";
+my @new_files = grep { /$extension$/ && -f "$target_dir/$_" } readdir($dh);
+closedir($dh);
+
+# 公開不要ファイルを除外
+@new_files = grep { $_ !~ /index_new\.html$/ } @new_files;
+
+# リストになければ追加
+open(my $out, '>>', $list_file) or die "Cannot open $list_file for appending: $!";
+my $added_count = 0;
+
+foreach my $file (@new_files) {
+    my $file_path = "$target_dir/$file";
+    if (!$existing_files{$file_path}) {
+        print $out "$file_path,\n";
+        print "Added: $file_path\n";
+        $added_count++;
+    }
+}
+close($out);
+
+print "Process completed. Added $added_count new files.\n";
+```
+
+#### 配置・書き換えコマンド
+```bash
+# common/に配置（上記内容をcatで作成後）
+chmod 755 ~/Dropbox/GH/common/automakelist.pl
+
+# 参照を一括書き換え
+grep -rl "automakelistfile\.pl" ~/Dropbox/GH | xargs sed -i 's/automakelistfile\.pl/automakelist.pl/g'
+
+# ルートMakefileの相対パス参照を絶対パスに統一
+sed -i 's|perl automakelist\.pl|perl ~/Dropbox/GH/common/automakelist.pl|g' ~/Dropbox/GH/Makefile
+
+# 確認（0と25になればOK）
+grep -rn "automakelistfile\.pl" ~/Dropbox/GH | wc -l
+grep -rn "automakelist\.pl" ~/Dropbox/GH | wc -l
+```
+
+---
+
+## 最終状態
+- `rule.mk` ファイル: 37個
+- `include rule.mk` 参照: 163箇所
+- `makefile` → `Makefile` リネーム: 84箇所
+- `automakelist.pl` 参照: 25箇所
+- Emacsの `init.el` への追記: 不要（`.mk` で解決）
+
+---
+
+## リポジトリ整理
+
+### Makefile リネーム
+- プロジェクト全体の小文字 `makefile` 74ファイルを `Makefile` に一括リネーム
+- 既に大文字だった9ファイルはそのまま維持
+
+### rule.mk 直書き統合・削除
+- ルート `rule.mk` を `Makefile` に直書き統合し削除
+- `upsftp/rule.mk` を `Makefile` に直書き統合し削除
+- `d_select/tex/rule.mk`、`w_select/tex/rule.mk`、`s_select/tex/rule.mk`、`m_select/tex/rule.mk` を各 `Makefile` に直書き統合し削除
+
+### common/rule.mk 更新
+- `a.out` の依存に `git` ターゲットを追加
+- `git` ターゲット（HOSTNAME判定によるP1のみpush）を追加
+- これにより全サブディレクトリで `make` 一発で git push まで完結
+
+### automakefile.pl 安全化（common/）
+- `"makefile"` → `"Makefile"` 対応
+- `target =` 行の意味検出による保持行読み込みに変更（行番号依存を排除）
+- アトミック書き込み（一時ファイル経由の rename）に変更
+- 異常検知 `die` を追加（`target =` 行未検出、保持行空の場合は上書きしない）
+
+### automaketex.pl 安全化（common/）
+- `"makefile"` → `"Makefile"` 対応
+- automakefile.pl と同様のアトミック書き込み・異常検知を実装
+
+### セキュリティ
+- `upsftp/upftp.pl`（FTPパスワード平文記載の旧スクリプト）を `git filter-repo` で全コミット履歴から完全削除
+- GitHub、XServer、Gitea の全リモートに強制 push 済み
+
+---
 
 ## 2026-04-02
+
+# CHANGELOG 2026-04-02
 
 ### Fixed
 - `git-peek`: Fixed `Version` string (`1.0.3-trial2` → `1.0.3`) to comply with `package-vc` parser
