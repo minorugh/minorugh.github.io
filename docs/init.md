@@ -33,22 +33,23 @@ title: Emacs Configuration
 ├── elisp/                        ← ローカルパッケージ置き場
 │   ├── bin/
 │   ├── css/
-│   ├── my-github.el
+│   ├── my-makefile.el
 │   ├── my-markdown.el
-│   ├── my-template.el
-│   └── my-dired.el
+│   └── my-template.el
 ├── elpa/
 ├── inits/
 │   ├── 00-base.el
 │   ├── 01-dashboard.el
 │   ├── 02-git.el
 │   ├── 03-evil.el
-│   ├── 04-counsel.el
-│   ├── 05-swiper.el
-│   ├── 05-company.el
-│   ├── 07-mozc.el
-│   ├── 08-highlight.el
-│   ├── 09-funcs.el
+│   ├── 04-evil-leader.el
+│   ├── 05-counsel.el
+│   ├── 06-swiper.el
+│   ├── 07-company.el
+│   ├── 08-mozc.el
+│   ├── 09-highlight.el
+│   ├── 10-compile.el
+│   ├── 10-funcs.el
 │   ├── 10-check.el
 │   ├── 10-selected.el
 │   ├── 20-edit.el

@@ -10,3 +10,7 @@ deploy:
 	google-chrome https://minorugh.github.io
 
 
+
+# Local Variables:
+# buffer-read-only: t
+# End:

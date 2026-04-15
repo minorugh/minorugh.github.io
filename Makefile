@@ -29,3 +29,7 @@ commits:
 
 actions:
 	google-chrome https://github.com/minorugh/minorugh.github.io/actions 2>/dev/null &
+
+# Local Variables:
+# buffer-read-only: t
+# End:
