@@ -1,3 +1,116 @@
+## 2026-04-14
+
+# Changelog - 2026-04-14
+
+## 目的
+Docker環境（ローカルテスト）と本番サーバーを同一ファイルで共有するため、
+`https://gospel-haiku.com/` で始まる絶対URLを `/` 始まりのルート相対パスに統一する。
+
+---
+
+## 背景・方針
+
+- `~/Dropbox/GH` を Docker の `gospel-haiku.com` DocumentRoot にマウントして共有
+- `/` 始まりのパスは本番・Docker両環境で同様に解決されるため問題なし
+- `https://gospel-haiku.com/...` の完全URLのみが修正対象
+- OGP・feed内の完全URLは試運転に影響しないため今回は対象外
+
+---
+
+## 変更ファイル
+
+### 1. `~/Dropbox/GH/common/define.txt`
+- **変更前バックアップ**: `define.txt.bak` として同ディレクトリに保存済み
+- **変更内容**: `https://gospel-haiku.com/` → `/` に一括置換
+- **残存する完全URL**: コメント行のメールアドレス `minoru@gospel-haiku.com` のみ（意図的に残置）
+
+### 2. `~/Dropbox/GH/d_kukai_test/choice.cgi`
+- **変更内容**: `https://gospel-haiku.com/` → `/` に一括置換
+- 対象箇所: favicon、CSS リンク（fonts/style.css、common/css/main.css）、navbar brand リンク・ロゴ画像、navbar メニューリンク（日記/談話室/Profile/Feedback/Search）
+
+### 3. `~/Dropbox/GH/d_kukai_test/post.cgi`
+- **変更内容**: `https://gospel-haiku.com/` → `/` に一括置換
+- 対象箇所: 同上
+
+### 4. `~/Dropbox/GH/d_kukai_test/gosen.cgi`
+- **変更内容**: `https://gospel-haiku.com/` → `/` に一括置換
+- 対象箇所: 同上
+
+---
+
+## 適用した sed コマンド
+
+```bash
+sed -i 's|https://gospel-haiku\.com/|/|g' \
+  ~/Dropbox/GH/common/define.txt \
+  ~/Dropbox/GH/d_kukai_test/choice.cgi \
+  ~/Dropbox/GH/d_kukai_test/post.cgi \
+  ~/Dropbox/GH/d_kukai_test/gosen.cgi
+```
+
+---
+
+## 次のステップ
+
+1. 新 `define.txt` で既存ページを数本再コンパイルして表示確認
+2. 問題なければ `~/Dropbox/GH` 配下の全ファイルに同じ置換を適用（別セッションで作業予定）
+
+---
+
+## 備考
+
+- `index.txt` 内の favicon URL（`https://gospel-haiku.com/d_kukai/img/favicon.png`）および
+  score リンク（`https://gospel-haiku.com/d_kukai/score/`）も修正対象だが、
+  `d_kukai_test` 用に `makeweb.pl` で再生成する際に対応予定
+
+
+
+# Changelog-20260414: Emacs環境の精鋭化と断捨離完了
+
+## 1. インデント・Makefile環境の最適化
+- **indent-tabs-mode の整理**: Makefileモードの自動判別に任せ、グローバル設定を削除。
+- **aggressive-indent-mode の断捨離**: 意図しない自動整形によるMakefile破壊を防止。
+- **手動整形の導入**: `C-c i` に `indent-region-or-buffer` を割り当て。標準の `electric-indent-mode` と併用。
+
+## 2. プロジェクト管理の標準化
+- **projectile の断捨離**: 巨大な外部パッケージを排除。
+- **project.el (builtin) への移行**: Makefileや.gitを自動認識する標準機能へ切り替え。依存ライブラリ（f.el, s.el, ht.el等）の整理。
+
+## 3. 構文チェック・編集支援の刷新
+- **flycheck の断捨離**: 標準の **flymake** へ移行し、動作を軽量化。
+- **selected.el / google-this の断捨離**: 標準の `post-command-hook` を利用した自作マイナーモード `my-selected-mode` に置き換え。IME制御も継承。
+- **sudo-edit の断捨離**: 標準のTRAMP機能（`/sudo::` 記法）による編集へ移行。
+
+## 4. 履歴管理とスニペットの軽量化
+- **prescient (一式) の断捨離**: `prescient`, `ivy-prescient`, `company-prescient` を削除。標準の **savehist-mode** による履歴保存へ移行。
+- **yasnippet-snippets の断捨離**: 数千の既製スニペットを捨て、自作スニペットのみの軽量運用に変更。
+
+## 5. UIとその他の整理
+- **avy / ivy-rich / google-translate の断捨離**: 不要な移動ツール、装飾、翻訳パケを排除。翻訳・検索は自作関数でブラウザへ統合。
+- **重要文化財の維持**: Web管理に必要な `rainbow-mode` は継続利用。
+
+## 結果
+- **パッケージ数**: 約70 → **55 (Success!)**
+- **削除パッケージ一覧**:
+  1. aggressive-indent
+  2. projectile
+  3. flycheck
+  4. selected
+  5. google-this
+  6. ivy-rich
+  7. avy
+  8. sudo-edit
+  9. google-translate
+  10. prescient
+  11. ivy-prescient
+  12. company-prescient
+  13. yasnippet-snippets
+  14. f / s / ht / dash 等 (autoremove対象)
+
+- **効果**: 起動速度の劇的向上、外部依存の最小化、Makefile編集の安全性確保。
+
+---
+
 ## 2026-04-13
 
 # CHANGELOG 2026-04-13
