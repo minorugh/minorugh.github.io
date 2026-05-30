@@ -1,3 +1,397 @@
+## 2026-04-13
+
+# CHANGELOG 2026-04-13
+
+## 対象スクリプト
+
+- `s_bklog.pl`（s_select用・新規作成）
+- `m_bklog.pl`（m_select用・新規作成）
+- `d_bklog.pl`（d_select用・可読性改善・曜日自動対応）
+- `d_mws.pl`（d_select用・8桁キー対応）
+- `d_txt2html.pl`（d_select用・新規作成）
+- `d_txt2tex.pl`（d_select用・新規作成）
+
+---
+
+## s/m_bklog.pl
+
+### 背景
+
+w_bklog.pl（週次句会）は既に稼働中。今回 s_bklog.pl（月例・第2週）と
+m_bklog.pl（月例・第4週）を新規作成した。
+
+当初は w/s/m の3句会でメインルーチンを共通化する方針で設計を進めたが、
+`$last_saturday`（投句締切土曜日）の計算ロジックが w と s/m で根本的に異なるため、
+設定変数だけでの吸収が困難と判断し、**s/m は独立したメインルーチン**を持つ構成とした。
+
+### w と s/m の last_saturday 計算ルールの違い
+
+#### w_bklog.pl（週次・毎週）
+
+投句締切土曜は「先週の土曜」。日曜に作業する場合は2日前ではなく8日前になる。
+
+| 実行曜日 | diff_sat | last_saturday の例（4月第3週） |
+|---|---|---|
+| 金(5) | -6日 | 4月4日 |
+| 土(6) | -7日 | 4月4日 |
+| 日(0) | -8日 | 4月4日 |
+
+```perl
+# w版
+my $diff_sat = ($wday == 0) ? -8 : -($wday + 1);
+```
+
+#### s/m_bklog.pl（月例・月1回）
+
+投句締切土曜は「当週の土曜」。金曜に作業するなら明日が土曜、日曜に作業するなら昨日が土曜。
+
+| 実行曜日 | diff_sat | last_saturday の例（4月第2週） |
+|---|---|---|
+| 金(5) | +1日 | 4月18日 |
+| 土(6) | 0日  | 4月18日 |
+| 日(0) | -1日 | 4月18日 |
+
+```perl
+# s/m版
+my $diff_sat = ($wday == 0) ? -1 : ($wday == 5) ? 1 : 0;
+```
+
+### 設定変数の3句会比較
+
+| 設定変数 | w_bklog.pl | s_bklog.pl | m_bklog.pl |
+|---|---|---|---|
+| `$sendata` | w_select/tex/minoru_sen.txt | s_select/tex/swan.txt | m_select/tex/mkukai.txt |
+| `$url_week` | gospel-haiku.com/w_kukai/... | gospel-haiku.com/s_kukai/... | gospel-haiku.com/m_kukai/... |
+| `$url_past` | gospel-haiku.com/w_kukai/... | gospel-haiku.com/s_kukai/... | gospel-haiku.com/m_kukai/... |
+| `$key_fmt` | `"%04d%02d%02d"` (8桁) | `"%04d%02d"` (6桁) | `"%04d%02d"` (6桁) |
+| `$key_date_from` | `"sunday"` | `"sunday"` | `"today"` |
+
+### メインルーチンの共通化断念について
+
+当初、設定変数 `$dedup_key`・`$sat_sun_gap` を導入して3句会のメインルーチンを
+共通化する試みを行った。
+
+#### 試みた共通化アプローチ
+
+```perl
+# 設定変数で曜日ごとの差分を制御しようとした案（採用せず）
+my $sat_sun_gap = 1;   # s/m=1（前日）, w=8（先週土曜）
+my $diff_sat = ($wday == 0) ? -$sat_sun_gap : -($wday + 1);
+```
+
+#### 断念した理由
+
+- w版: 金(5)→-6日、土(6)→-7日、日(0)→-8日（3曜日とも「先週土曜」）
+- s/m版: 金(5)→+1日、土(6)→0日、日(0)→-1日（3曜日とも「当週土曜」）
+
+金曜の場合、w は -6日、s/m は +1日と符号も含めて全く異なる。
+単一の設定変数では表現できず、メインルーチン自体を変えざるを得なかった。
+
+また途中で `$dedup_key`（同月キー行削除）の検討も行ったが、
+s/m は月1回開催のため同月キーが重複することはなく、この処理自体が不要と判明。
+
+#### 最終的な構成
+
+- **w_bklog.pl**：既存のまま（変更なし）
+- **s_bklog.pl**：s/m共通のメインルーチン、設定部分のみ差異
+- **m_bklog.pl**：s/m共通のメインルーチン、設定部分のみ差異
+
+s と m はメインルーチンが同一で、設定変数のみ異なる。
+
+### テストコードの日付
+
+#### s_bklog.pl
+
+```perl
+# my $NOW = timelocal(0, 0, 12, 17, 3, 126);  # 金曜: 2026年4月17日 wday=5
+# my $NOW = timelocal(0, 0, 12, 18, 3, 126);  # 土曜: 2026年4月18日 wday=6
+# my $NOW = timelocal(0, 0, 12, 19, 3, 126);  # 日曜: 2026年4月19日 wday=0
+```
+
+#### m_bklog.pl
+
+```perl
+# my $NOW = timelocal(0, 0, 12, 24, 3, 126);  # 金曜: 2026年4月24日 wday=5
+# my $NOW = timelocal(0, 0, 12, 25, 3, 126);  # 土曜: 2026年4月25日 wday=6
+# my $NOW = timelocal(0, 0, 12, 26, 3, 126);  # 日曜: 2026年4月26日 wday=0
+```
+
+### 期待値
+
+#### s_bklog.pl（4月第2週を例に）
+
+| 実行日 | last_saturday | target_key |
+|---|---|---|
+| 金 4/17 | 2026年4月18日 | 202604 |
+| 土 4/18 | 2026年4月18日 | 202604 |
+| 日 4/19 | 2026年4月18日 | 202604 |
+
+#### m_bklog.pl（4月第4週を例に）
+
+| 実行日 | last_saturday | target_key |
+|---|---|---|
+| 金 4/24 | 2026年4月25日 | 202604 |
+| 土 4/25 | 2026年4月25日 | 202604 |
+| 日 4/26 | 2026年4月25日 | 202604 |
+
+---
+
+## d_select 4本セット
+
+### 背景
+
+d_select（毎日句会）は他の3句会と性質が異なり、毎週月曜日に過去7日分の
+投句ログをサーバから取得して minoru_sen.txt に追記する仕組み。
+
+既存コードは動作していたが可読性が低く、他3句会との整合を取るため以下を実施：
+- 設定条件を冒頭の `=== 設定 ===` ブロックに集約
+- ファイルハンドルを安全な `open(my $fh, ...)` 形式に統一
+- 曜日ずれ（火・水曜作業）への自動対応を追加
+
+### d_bklog.pl の曜日自動対応ロジック
+
+bk.logの構造：`<b>yyyy年mm月dd日</b>` 行が日付区切りで、その後にその日の投句が続く。
+
+月曜以外に作業した場合、当日・前日分は対象外として自動スキップ：
+
+| 実行曜日 | 取得日数 | スキップ日数 | キー行（直近月曜） |
+|---|---|---|---|
+| 月(1) | 7日 | 0日 | 当日 |
+| 火(2) | 8日 | 1日（今日分除外） | 昨日 |
+| 水(3) | 9日 | 2日（今日・昨日分除外） | 一昨日 |
+
+```perl
+my $days_to_last_mon = ($wday == 0) ? 6 : $wday - 1;
+my $skip_days  = $days_to_last_mon;
+my $fetch_days = 7 + $skip_days;
+```
+
+### テストコードの日付（d_bklog.pl）
+
+```perl
+# my $NOW = timelocal(0, 0, 12, 13, 3, 126);  # 月曜: 2026年4月13日 wday=1
+# my $NOW = timelocal(0, 0, 12, 14, 3, 126);  # 火曜: 2026年4月14日 wday=2
+# my $NOW = timelocal(0, 0, 12, 15, 3, 126);  # 水曜: 2026年4月15日 wday=3
+```
+
+### d_txt2html.pl の日付ロジック
+
+ファイル名（直近月曜日付）から逆算：
+
+- 先週日曜 = 月曜 - 1日
+- 先週土曜 = 月曜 - 2日
+- 出力：`-*[yyyymmddhhmm]M月D日~M月D日投句分 <-com>`
+
+### d_txt2tex.pl
+
+w版と同一構造。末尾の句会名のみ異なる：
+```
+毎日句会みのる選・\kanji年\kanji月\kanji日
+```
+
+### d_mws.pl
+
+w_mws.plと同一。8桁キー（yyyymmdd）対応、md5比較に空行スキップ追加。
+
+---
+
+## 最終版コード
+
+### s_bklog.pl
+
+```perl
+#! /usr/bin/perl
+use strict;
+use warnings;
+use File::Copy;
+use Time::Local;
+
+# === 設定 ===
+my $home          = $ENV{"HOME"};
+my $sendata       = "$home/Dropbox/GH/s_select/tex/swan.txt";
+my $bksendata     = "$sendata.bak";
+my $url_week      = "https://gospel-haiku.com/s_kukai/data/entry.dat";
+my $url_past      = "https://gospel-haiku.com/s_kukai/data/p_entry.dat";
+my $key_fmt       = "%04d%02d";  # 6桁 yyyymm
+my $key_date_from = "sunday";    # "sunday"=w/s用, "today"=m用（第4週翌月対策）
+# ============
+
+my $ONE_DAY = 24 * 60 * 60;
+
+my $NOW  = time;
+my @now  = localtime($NOW);
+my $wday = $now[6];  # 0=日, 1=月, ..., 5=金, 6=土
+
+# テスト用（使用する1行だけコメントを外し、本番コード3行をコメントアウト）
+# my $NOW = timelocal(0, 0, 12, 17, 3, 126);  # 金曜: 2026年4月17日 wday=5
+# my $NOW = timelocal(0, 0, 12, 18, 3, 126);  # 土曜: 2026年4月18日 wday=6
+# my $NOW = timelocal(0, 0, 12, 19, 3, 126);  # 日曜: 2026年4月19日 wday=0
+# my @now  = localtime($NOW);
+# my $wday = $now[6];
+
+my $targetUrl;
+if ($wday == 0) {
+    $targetUrl = $url_past;
+} elsif ($wday == 5 || $wday == 6) {
+    $targetUrl = $url_week;
+} else {
+    print "not found\n";
+    exit;
+}
+
+my $logdata = "bklog.log";
+system("wget -q -O $logdata $targetUrl");
+system("nkf -w -Lu --overwrite $logdata");
+
+# 当週土曜: 金(5)→+1日, 土(6)→今日, 日(0)→-1日
+my $diff_sat = ($wday == 0) ? -1 : ($wday == 5) ? 1 : 0;
+my @last_sat = localtime($NOW + $diff_sat * $ONE_DAY);
+
+# 締切日曜: 日(0)→今日, 土(6)→+1日, 金(5)→+2日
+my @target_sun;
+if ($wday == 0) {
+    @target_sun = @now;
+} else {
+    @target_sun = localtime($NOW + (7 - $wday) * $ONE_DAY);
+}
+
+my ($key_year, $key_month, $key_day) = $key_date_from eq "today"
+    ? ($now[5]+1900,        $now[4]+1,        $now[3])
+    : ($target_sun[5]+1900, $target_sun[4]+1, $target_sun[3]);
+
+my $last_saturday = sprintf("%04d年%d月%d日", $last_sat[5]+1900, $last_sat[4]+1, $last_sat[3]);
+my $target_key    = sprintf($key_fmt, $key_year, $key_month);
+
+copy($sendata, $bksendata);
+
+open(my $log_fh, "<", $logdata) or die "Cannot open $logdata: $!";
+my @log = <$log_fh>;
+close($log_fh);
+
+my %uniq;
+foreach my $line (@log) {
+    chomp $line;
+    my (undef, $name) = split(/,/, $line);
+    $uniq{$name} = 1 if defined $name && $name ne "";
+}
+my $pn = scalar keys %uniq;
+
+open(my $file_fh, "<", $sendata) or die "Cannot open $sendata: $!";
+my @file = <$file_fh>;
+close($file_fh);
+
+open(my $new_fh, ">", $sendata) or die "Cannot open $sendata: $!";
+print $new_fh "$target_key:\n";
+print $new_fh "$last_saturday（参加者 ${pn}名）\n";
+foreach my $line (@log) {
+    chomp $line;
+    my (undef, $name, undef, undef, $comment) = split(/,/, $line);
+    print $new_fh "$comment\t$name\n";
+}
+print $new_fh @file;
+close($new_fh);
+```
+
+### m_bklog.pl
+
+```perl
+#! /usr/bin/perl
+use strict;
+use warnings;
+use File::Copy;
+use Time::Local;
+
+# === 設定 ===
+my $home          = $ENV{"HOME"};
+my $sendata       = "$home/Dropbox/GH/m_select/tex/mkukai.txt";
+my $bksendata     = "$sendata.bak";
+my $url_week      = "https://gospel-haiku.com/m_kukai/data/entry.dat";
+my $url_past      = "https://gospel-haiku.com/m_kukai/data/p_entry.dat";
+my $key_fmt       = "%04d%02d";  # 6桁 yyyymm
+my $key_date_from = "today";     # "sunday"=w/s用, "today"=m用（第4週翌月対策）
+# ============
+
+my $ONE_DAY = 24 * 60 * 60;
+
+my $NOW  = time;
+my @now  = localtime($NOW);
+my $wday = $now[6];  # 0=日, 1=月, ..., 5=金, 6=土
+
+# テスト用（使用する1行だけコメントを外し、本番コード3行をコメントアウト）
+# my $NOW = timelocal(0, 0, 12, 24, 3, 126);  # 金曜: 2026年4月24日 wday=5
+# my $NOW = timelocal(0, 0, 12, 25, 3, 126);  # 土曜: 2026年4月25日 wday=6
+# my $NOW = timelocal(0, 0, 12, 26, 3, 126);  # 日曜: 2026年4月26日 wday=0
+# my @now  = localtime($NOW);
+# my $wday = $now[6];
+
+my $targetUrl;
+if ($wday == 0) {
+    $targetUrl = $url_past;
+} elsif ($wday == 5 || $wday == 6) {
+    $targetUrl = $url_week;
+} else {
+    print "not found\n";
+    exit;
+}
+
+my $logdata = "bklog.log";
+system("wget -q -O $logdata $targetUrl");
+system("nkf -w -Lu --overwrite $logdata");
+
+# 当週土曜: 金(5)→+1日, 土(6)→今日, 日(0)→-1日
+my $diff_sat = ($wday == 0) ? -1 : ($wday == 5) ? 1 : 0;
+my @last_sat = localtime($NOW + $diff_sat * $ONE_DAY);
+
+# 締切日曜: 日(0)→今日, 土(6)→+1日, 金(5)→+2日
+my @target_sun;
+if ($wday == 0) {
+    @target_sun = @now;
+} else {
+    @target_sun = localtime($NOW + (7 - $wday) * $ONE_DAY);
+}
+
+# m_selectは毎月第4週作業のため、金・土作業時にtarget_sunが翌月になることがある
+# 例）1月31日(土)作業 → target_sun = 2月1日 → キーが"202602"になってしまう
+# 句会が属する月は今日の月が正しいので@nowの年月を使う
+my ($key_year, $key_month, $key_day) = $key_date_from eq "today"
+    ? ($now[5]+1900,        $now[4]+1,        $now[3])
+    : ($target_sun[5]+1900, $target_sun[4]+1, $target_sun[3]);
+
+my $last_saturday = sprintf("%04d年%d月%d日", $last_sat[5]+1900, $last_sat[4]+1, $last_sat[3]);
+my $target_key    = sprintf($key_fmt, $key_year, $key_month);
+
+copy($sendata, $bksendata);
+
+open(my $log_fh, "<", $logdata) or die "Cannot open $logdata: $!";
+my @log = <$log_fh>;
+close($log_fh);
+
+my %uniq;
+foreach my $line (@log) {
+    chomp $line;
+    my (undef, $name) = split(/,/, $line);
+    $uniq{$name} = 1 if defined $name && $name ne "";
+}
+my $pn = scalar keys %uniq;
+
+open(my $file_fh, "<", $sendata) or die "Cannot open $sendata: $!";
+my @file = <$file_fh>;
+close($file_fh);
+
+open(my $new_fh, ">", $sendata) or die "Cannot open $sendata: $!";
+print $new_fh "$target_key:\n";
+print $new_fh "$last_saturday（参加者 ${pn}名）\n";
+foreach my $line (@log) {
+    chomp $line;
+    my (undef, $name, undef, undef, $comment) = split(/,/, $line);
+    print $new_fh "$comment\t$name\n";
+}
+print $new_fh @file;
+close($new_fh);
+```
+
+---
+
 ## 2026-04-12
 
 # CHANGELOG - 2026-04-12
