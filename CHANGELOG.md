@@ -1,3 +1,118 @@
+## 2026-04-10
+
+# Changelog 2026-04-10
+
+## 09-funcs.el — `compile-autoclose` 改善
+
+### 変更内容
+
+- `@echo >&2` の出力をミニバッファーに表示するよう改善
+- ウィンドウを即時クローズに変更（`run-at-time` 廃止）
+- 確認系ターゲット（`##>`のみ）は compilation バッファーを全画面表示
+- docstring を実態に合わせて更新
+
+### 最終コード
+
+```elisp
+(defun compile-autoclose (buffer string)
+  "Auto-close compile window if BUFFER finished successfully.
+Echo the last @echo output line to the minibuffer."
+  (if (and (string-match "compilation" (buffer-name buffer))
+           (string-match "finished" string))
+      (let ((msg (with-current-buffer buffer
+                   (save-excursion
+                     (goto-char (point-max))
+                     (if (re-search-backward "^##>\\(.*\\)$" nil t)
+                         (match-string 1)
+                       "Compile successful.")))))
+        (message "%s" msg)
+        (if (string-equal msg "")
+            (run-at-time 0.1 nil (lambda ()
+                                   (switch-to-buffer buffer)
+                                   (delete-other-windows)))
+          (delete-windows-on buffer)))
+    (message "Compilation exited abnormally: %s" string)))
+
+(setq compilation-finish-functions #'compile-autoclose)
+```
+
+### 技術メモ
+
+- `@echo` の出力は `>&2`（stderr）にリダイレクトすることで compilation バッファーに出力される
+- `cron/Makefile` の `@echo` には `##>` マーカーを付けて統一。Elispはこのマーカーだけを拾う
+- 実行系は `##> メッセージ` → `match-string 1` がメッセージ文字列になる → ミニバッファー通知＋自動クローズ
+- 確認系は `##>` のみ → `match-string 1` が空文字列 `""` になる → compilation バッファーを全画面表示
+- `##>` のない compilation（`make git` 等）は `"Compile successful."` にフォールバック
+- 確認系の判別は `string-equal msg ""` — `[^:\n]` の `\n` は Emacs 正規表現では無効なため正規表現マッチは使用しない
+
+---
+
+## cron/Makefile — `@echo "##>..."` ルールに統一
+
+新しいターゲットを追加する際は以下のルールで記述する：
+
+- 実行系: `@echo "##> メッセージ" >&2`
+- 確認系: `@echo "##>" >&2`
+- 通知不要（別ウィンドウが開く等）: `@echo` 不要
+
+| ターゲット | @echo | 種別 |
+|---|---|---|
+| `cron-log` | なし | 別ウィンドウ |
+| `xsrv-log` | なし | 別ウィンドウ |
+| `crontab` | なし | 別ウィンドウ |
+| `xsrv-stop` | `##> xsrv-backup: stopped.` | 実行系 |
+| `xsrv-start` | `##> xsrv-backup: started.` | 実行系 |
+| `xsrv-status` | `##>` | 確認系 |
+| `xsrv-reload` | `##> xsrv-backup: daemon reloaded.` | 実行系 |
+| `xsrv-run` | `##> xsrv-backup: manual run triggered.` | 実行系 |
+| `xsrv-commit-lean` | `##> xsrv-commit-lean: history truncated.` | 実行系 |
+| `bat-status` | `##>` | 確認系 |
+| `bat-set-60` | `##> BAT0 charge threshold: START=40 STOP=60` | 実行系 |
+| `bat-set-80` | `##> BAT0 charge threshold: START=40 STOP=80` | 実行系 |
+| `temp` | `##>` | 確認系 |
+| `smart` | `##>` | 確認系 |
+
+---
+
+## cron/backup/Makefile 新設
+
+`~/Dropbox/Makefile` を `dotfiles/cron/backup/Makefile` に移動し git 管理下に置いた。
+
+- `autobackup.sh` の `MAKEFILE` 変数のパスを更新
+- `~/Dropbox/Makefile` は動作確認後に手動削除予定
+
+---
+
+## bin/emacs-restore — HOMEキーバインド復元スクリプト修正
+
+### 変更内容
+
+- `head -n1` でダミーウィンドウを拾う問題を修正
+- `&&` チェーンを `if` 文に変更し、IDの受け渡しを確実化
+
+### 最終コード
+
+```bash
+#!/bin/bash
+# Restore minimized Emacs window (for HOME key binding)
+for wid in $(xdotool search --class emacs 2>/dev/null); do
+    if xprop -id "$wid" _NET_WM_STATE 2>/dev/null | grep -q HIDDEN; then
+        xdotool windowmap --sync "$wid"
+        xdotool windowactivate "$wid"
+        break
+    fi
+done
+```
+
+### 技術メモ
+
+- `xdotool search --class emacs` はダミーウィンドウを含む複数IDを返す
+- `_NET_WM_STATE_HIDDEN` を持つウィンドウだけをループで絞り込む
+- HOMEキーはxfconf-queryで `/commands/custom/Home` に登録済み
+- Xfce4の仕様上、Emacs使用中（フォーカスあり）はHOMEがEmacsに届きスクリプトは発火しない
+
+---
+
 ## 2026-04-09
 
 # Changelog — 2026-04-09
