@@ -1,3 +1,44 @@
+## 2026-04-12
+
+# CHANGELOG - 2026-04-12
+
+## dotfiles/etc/tlp.conf
+
+- タイトルを `ThinkPad P1` から `ThinkPad P1 / x250` に変更
+- BAT1（x250 Ultrabay）用のしきい値を追加
+  - `START_CHARGE_THRESH_BAT1=40`
+  - `STOP_CHARGE_THRESH_BAT1=60`
+- P1にはBAT1が存在しないため、BAT1設定は無視される旨をコメントに明記
+
+## dotfiles/cron/Makefile
+
+### BAT1対応（x250 Ultrabay）
+- `bat-set-60` / `bat-set-80`: BAT1のしきい値を書き換える `sed` コマンドを追加
+- `bat-discharge`: HOSTNAME分岐を追加
+  - P1: BAT0を `force-discharge`
+  - x250: BAT0を `inhibit-charge`、BAT1を `force-discharge`
+- `bat-discharge-stop`: HOSTNAME分岐を追加
+  - P1: BAT0のみ `auto` に復帰
+  - x250: BAT0/BAT1両方 `auto` に復帰
+- `bat-capacity`: HOSTNAME分岐を追加
+  - P1: BAT0のみ表示
+  - x250: BAT0/BAT1両方表示
+
+### compilationバッファー表示ルールの統一
+- 全ての `@echo` を `@echo "##> ..." >&2` 形式に統一
+- 出力を確認したいターゲットに `@echo "##>" >&2` を追加
+  - `bat-status` / `bat-capacity` / `temp` / `smart`
+- ヘッダーに `##>` ルールのコメントを追記（予定）
+
+### compilationバッファー表示ルール（参考）
+```
+@echo "##>" >&2          → 全画面表示（q で閉じる）
+@echo "##> メッセージ" >&2 → ウィンドウを閉じてminibufferにメッセージ表示
+echo なし                → "Compile successful." をminibufferに表示して閉じる
+```
+
+---
+
 ## 2026-04-11
 
 # Changelog - 2026.04.11
