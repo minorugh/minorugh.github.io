@@ -1,3 +1,184 @@
+## 2026-04-15
+
+# Changelog 2026-04-15
+
+## 断捨離・コードレビューまとめ
+
+### 発端
+
+`init-loader` によるバイトコンパイル時に複数の警告・エラーが出ていたため、
+ファイルごとに原因を特定・整理した。
+
+---
+
+### byte-compile 警告・エラーの調査
+
+```bash
+emacs --batch -Q \
+  --eval "(setq byte-compile-warnings t)" \
+  -f batch-byte-compile \
+  ~/.emacs.d/inits/*.el 2>&1 | grep -A2 "Warning"
+```
+
+主な問題は以下の4パターンだった。
+
+| ファイル | 内容 | 種別 |
+|---|---|---|
+| `30-ui.el` 18, 29行目 | `leaf :hook` のコンスセル形式と `leaf` バージョンの相性 | Error/Warning |
+| `40-hydra-*.el` | `defhydra` 構文のコンスセル形式 | Warning |
+| `20-region-action.el` 27行目 | `defvar` がトップレベル以外 | Warning |
+| `02-git.el` 9行目 | `:url` キーワードの誤検知 | Warning |
+
+---
+
+### 30-ui.el
+
+- 18行目 `(after-init-hook . global-hl-line-mode)` はdotを外すと機能しなくなるため、
+  `leaf` 作者に直接確認することにした。
+- 29行目 `(after-init-hook . doom-modeline-mode)` は一貫性のため dot を戻した。
+- エラーはバイトコンパイル時のみで、実動作には影響なし。
+
+---
+
+### 08-highlight.el
+
+- 9〜10行目: `leaf :hook` のリスト形式が崩れており、`text-mode-hook` が `:hook` の
+  外に出ていた。括弧で括ってリスト形式に統一する。
+- 81行目: `before-save-hook` に `indent-region-or-buffer` を登録していたが、
+  `super-save` と組み合わせると自動保存のたびにバッファ全体が整形されるため削除。
+  手動（`C-x c-i`）のみの運用に変更。
+- `aggressive-indent` のコメントアウトは削除候補。
+
+---
+
+### 20-region-action.el
+
+- `selected` パッケージから自前実装（`my-selected-mode`）への移行済み。コードは整理されていてすっきり。
+- `defvar my-selected-mode-map` と `defvar my-ime-flag` が `:preface` / `:config`
+  の中にあり警告の原因になっていた。`leaf` ブロックの前に移動。
+- docstring を追加:
+
+```elisp
+(defvar my-selected-mode-map (make-sparse-keymap)
+  "Keymap active only when region is selected.")
+
+(defvar my-ime-flag nil
+  "Non-nil means IME was active before region activation.")
+```
+
+- コメントアウト（`selected` パッケージ一式）は保険として保持。問題なければ削除予定。
+
+---
+
+### 30-utils.el
+
+- `projectile` のコメントアウトを削除候補。builtin の `project` に完全移行済み。
+- その他は問題なし。
+
+---
+
+### 04-counsel.el
+
+- `avy` のコメントアウト（59〜61行目）を削除候補。
+- その他は問題なし。
+
+---
+
+### 06-company.el
+
+- `defvar company-mode/enable-yas` が `:config` の中にあるが、
+  `defun` / `setq` と3点セットで意味をなすため、あえて外に出さずまとめて置く方針とした。
+  視認性と保守性を優先。
+- `prescient` / `yasnippet-snippets` のコメントアウト（57〜76行目）を削除候補。
+
+---
+
+### 20-edit.el
+
+- `sudo-edit` のコメントアウト（92〜93行目）を削除候補。自前の `my-sudo-reopen` で代替済み。
+- その他は問題なし。
+
+---
+
+### 20-flymake.el
+
+- `flycheck` から `flymake`（builtin）に移行済み。
+- `flycheck` / `textlint` / `ispell` の大量のコメントアウトを削除候補。
+- `flymake` は警告箇所のピンポイント表示が flycheck より弱いが、機能としては十分。
+
+---
+
+### init-loader 周辺
+
+- `init-loader-load` が2回呼ばれていたバグを修正（起動時間の短縮効果あり）。
+- `inhibit-message` で `init-loader-load` を囲み、起動時のエコーエリアへの
+  コンパイルメッセージ出力を抑制（チラリズムは完全には消えないため割り切り）。
+- 最終的な書き方:
+
+```elisp
+(leaf init-loader
+  :ensure t
+  :load-path "~/.emacs.d/elisp"
+  :config
+  (setq init-loader-show-log-after-init 'error-only)
+  (setq init-loader-byte-compile t)
+  (switch-to-buffer (get-buffer-create "*dashboard*"))
+  (let ((inhibit-message t))
+    (init-loader-load)))
+```
+
+---
+
+### 方針まとめ
+
+- `defvar` をトップレベルに出すか `leaf` 内にまとめるかは、可読性・保守性を優先して判断。
+  セットで意味をなすコードはまとめて置く。
+- バイトコンパイル警告は実害のないものは `byte-compile-warnings` で抑制するか割り切る。
+- `leaf :hook` のコンスセル問題は `leaf` 作者に確認中。
+- コメントアウトは現状保険として保持し、動作確認後に順次削除予定。
+
+---
+
+## Emacs設定
+
+### indent-helper: evil-emacs-state対応
+- `C-i` 実行時に `evil-with-state emacs` でラップし、実行後に元のstateへ自動復帰
+
+### my-region-actions: 遅延ロード対応
+- `activate-mark-hook` に `my-region-actions-initialize` を登録し、初回リージョン選択時にのみ本体をロード
+- `remove-hook` で初回実行後は自身を解除、2回目以降は素通り
+- 初回発火時のIME制御（`my-ime-flag` / `deactivate-input-method`）を関数末尾で補完
+
+### Makefile: 誤編集防止
+- 全Makefileのフッターに `buffer-read-only: t` ローカル変数を追記（100ファイル）
+- `makefile-mode-hook` でトグル関数とキーバインドを設定
+
+```elisp
+(defun my-makefile-toggle-readonly () ...)
+
+(add-hook 'makefile-mode-hook
+          (lambda ()
+            (font-lock-mode 1)
+            (local-set-key (kbd "C-c C-e") 'my-makefile-toggle-readonly)
+            (key-chord-define (current-local-map) "qq" 'my-makefile-toggle-readonly)))
+```
+
+### Makefile: font-lock有効化
+- `buffer-read-only: t` の影響でシンタックスカラーが無効になる問題を修正
+- `makefile-mode-hook` に `(font-lock-mode 1)` を追加
+
+### Makefile: HOSTNAMEの誤記修正
+- 22行目にURLが混入していた誤記を修正
+
+```makefile
+# 修正前
+HOSTNAME https://github.com/emacsorphanage/key-chord    := $(shell hostname)
+# 修正後
+HOSTNAME := $(shell hostname)
+```
+
+---
+
 ## 2026-04-14
 
 # Changelog - 2026-04-14
