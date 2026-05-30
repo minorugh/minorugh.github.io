@@ -1,3 +1,97 @@
+## 2026-04-11
+
+# Changelog - 2026.04.11
+
+## emacs-toggle 導入
+
+### 背景
+HOMEキーにEmacs最小化復元を割り当てようとしたが、
+Xfce4のグローバルショートカットはEmacsアクティブ中もキーを横取りするため断念。
+F12キーでトグル動作する`emacs-toggle`に方針転換した。
+
+### 変更内容
+
+#### bin/emacs-toggle（新規）
+F12キーでEmacsの最小化・復元をトグルするスクリプト。
+- 最小化中のEmacsウィンドウを検出して復元
+- 表示中なら最小化
+
+```bash
+#!/bin/bash
+for wid in $(xdotool search --class emacs 2>/dev/null); do
+    if xprop -id "$wid" _NET_WM_STATE 2>/dev/null | grep -q HIDDEN; then
+        xdotool windowmap --sync "$wid"
+        xdotool windowactivate "$wid"
+        exit
+    fi
+done
+wid=$(xdotool search --class emacs 2>/dev/null | tail -n1)
+xdotool windowminimize "$wid"
+```
+
+#### bin/emacs-restore（削除）
+`emacs-toggle`に統合のため削除。
+
+#### Makefile
+- `baseinstall`の依存から`emacs-restore`を削除し`emacs-toggle`を追加
+- `emacs-restore`ターゲットを`emacs-toggle`ターゲットに変更
+
+#### bin/README.md
+- `emacs-restore`の記述を削除
+- `emacs-toggle`のセクションを追加
+
+#### README.md
+- makeターゲット一覧を更新
+- 更新履歴を追記
+
+### Xfce4ショートカット
+```
+/commands/custom/F12 → emacs-toggle
+```
+
+---
+
+## devilspie 廃止・autostart 統合
+
+### 背景
+devilspie は Emacs 最小化起動のためだけに使っており過剰。
+emacs-toggle がすでに xdotool を使っているため依存を統一し、
+自動起動スクリプトも .autostart.sh に一本化して断捨離した。
+
+### 変更内容
+
+#### .autostart.sh
+Emacs・Thunderbird の自動起動と最小化を追加。
+
+```bash
+emacs &
+sleep 5s
+wid=$(xdotool search --class emacs 2>/dev/null | tail -n1)
+[ -n "$wid" ] && xdotool windowminimize "$wid"
+thunderbird &
+sleep 8s
+wid=$(xdotool search --class thunderbird 2>/dev/null | tail -n1)
+[ -n "$wid" ] && xdotool windowminimize "$wid"
+```
+
+#### devils/（削除）
+- `devils_startup.sh` 削除
+- `emacs.ds` 削除
+- `devils/` ディレクトリ削除
+
+#### .config/autostart/devils_startup.desktop（削除）
+devilspie の autostart エントリを削除。
+
+#### .gitignore
+`.emacs.d/session*` を追加。
+
+#### README.md
+- `make autostart` の説明を更新
+- SSH キー・keychain セクションに .autostart.sh の役割を補足
+- 更新履歴を追記
+
+---
+
 ## 2026-04-10
 
 # Changelog 2026-04-10
