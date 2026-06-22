@@ -27,47 +27,42 @@ title: Emacs Configuration
 
 設定ファイルの構成は下記のとおりです。
 
-```codesession
+```
 ~/.emacs.d
 │
 ├── elisp/                        ← ローカルパッケージ置き場
 │   ├── bin/
 │   ├── css/
-│   ├── my-makefile.el
+│   ├── my-evil-cheat-sheet.el
 │   ├── my-markdown.el
-│   └── my-template.el
+│   ├── my-sen-cleanup.el
+│   ├── my-template.el
+│   ├── my-tig-bridge.el
+│   └── seiho-haiku.el
 ├── elpa/
 ├── inits/
 │   ├── 00-base.el
 │   ├── 01-dashboard.el
-│   ├── 02-git.el
-│   ├── 03-evil.el
+│   ├── 02-evil.el
+│   ├── 03-ivy.el
 │   ├── 04-counsel.el
-│   ├── 05-swiper.el
-│   ├── 06-company.el
-│   ├── 07-mozc.el
-│   ├── 08-highlight.el
-│   ├── 09-compile.el
-│   ├── 10-funcs.el
-│   ├── 20-edit.el
-│   ├── 20-flymake.el
-│   ├── 20-region-action.el
-│   ├── 30-ui.el
-│   ├── 30-utils.el
-│   ├── 40-hydra-browse.el
-│   ├── 40-hydra-dired.el
-│   ├── 40-hydra-menu.el
-│   ├── 50-dired.el
-│   ├── 50-neotree.el
-│   ├── 60-howm.el
+│   ├── 05-company.el
+│   ├── 06-mozc.el
+│   ├── 07-functions.el
+│   ├── 08-edit.el
+│   ├── 09-make.el
+│   ├── 10-ui.el
+│   ├── 20-utils.el
+│   ├── 30-dired.el
+│   ├── 40-remote.el
+│   ├── 50-howm.el
 │   ├── 60-markdown.el
-│   ├── 60-org.el
-│   ├── 60-web.el
-│   ├── 70-translate.el
-│   ├── 70-yatex.el
-│   ├── 80-darkroom.el
-│   ├── 90-easy-hugo.el
-│   └── makefile
+│   ├── 70-hydra-browse.el
+│   ├── 70-hydra-dired.el
+│   ├── 80-easy-hugo.el
+│   ├── 80-neotree.el
+│   ├── 80-translate.el
+│   └── 90-darkroom.el
 ├── snippets/
 ├── tmp/                          ← 各種履歴・キャッシュ
 ├── early-init.el
@@ -80,15 +75,15 @@ title: Emacs Configuration
 | 番号 | カテゴリ |
 |------|---------|
 | 00-09 | コア・基本設定 |
-| 10-19 | 入力・選択サポート |
-| 20-29 | 編集・チェック |
-| 30-39 | UI・ユーティリティ |
-| 40-49 | Hydra メニュー |
-| 50-59 | ファイラー |
-| 60-69 | メモ・文書編集 |
-| 70-79 | 外部ツール連携 |
-| 80-89 | 執筆モード |
-| 90-99 | ブログ管理 |
+| 10-19 | UI・外観 |
+| 20-29 | ユーティリティ |
+| 30-39 | ファイラー |
+| 40-49 | リモート・サーバー連携 |
+| 50-59 | メモ環境 |
+| 60-69 | 文書編集 |
+| 70-79 | Hydra メニュー |
+| 80-89 | 外部ツール連携 |
+| 90-99 | 執筆モード |
 
 
 ## 2. 起動設定
@@ -105,9 +100,9 @@ title: Emacs Configuration
 
 [https://github.com/minorugh/dotfiles/blob/main/.emacs.d/early-init.el](https://github.com/minorugh/dotfiles/blob/main/.emacs.d/early-init.el)
 
-#### 2.1.1. GC・起動高速化
+#### 2.1.1. 起動高速化
 
-```code
+```elisp
 ;; GCを起動完了まで実質停止
 (setq gc-cons-threshold most-positive-fixnum)
 
@@ -117,56 +112,40 @@ title: Emacs Configuration
 ;; パッケージ初期化を init.el に委譲
 (setq package-enable-at-startup nil)
 
-;; 非インタラクティブ時は新しいソースを優先
-(setq load-prefer-newer noninteractive)
+;; 新しいソースファイルを優先
+(setq load-prefer-newer t)
 
 ;; フレームリサイズを抑制
 (setq frame-inhibit-implied-resize t)
 ```
 
-#### 2.1.2. 初期フレーム設定
+#### 2.1.2. エンコーディングとフォント
 
-```code
-;; エンコーディングとフォント
+マシン名が `P1` かどうかでフォントサイズを切り替えます。
+
+```elisp
 (prefer-coding-system 'utf-8)
-(set-language-environment "Japanese")
-(push '(font . "Cica-18") default-frame-alist)
+(let ((font-size (if (string= (system-name) "P1") 18 16)))
+  (push `(font . ,(format "Cica-%d" font-size)) initial-frame-alist))
+(setq inhibit-compacting-font-caches t)
+```
 
-;; UI要素を非表示
-(push '(menu-bar-lines . 0) default-frame-alist)
-(push '(tool-bar-lines . 0) default-frame-alist)
-(push '(vertical-scroll-bars) default-frame-alist)
+#### 2.1.3. UI の早期無効化とフレーム設定
 
-;; 最大化表示
+```elisp
+;; UI 要素を非表示（フリッカー防止）
+(push '(menu-bar-lines    . 0) default-frame-alist)
+(push '(tool-bar-lines    . 0) default-frame-alist)
+(push '(vertical-scroll-bars ) default-frame-alist)
+(push '(undecorated       . t) default-frame-alist)
+
+;; 外部モニター（DP-1-2, x=1920）で最大化起動
 (push '(fullscreen . maximized) initial-frame-alist)
+(push '(left . 1920)            initial-frame-alist)
+(push '(top  . 0)               initial-frame-alist)
 ```
 
-#### 2.1.3. ~/.Xresources による X11 レベルの設定
-
-`early-init.el` が読み込まれる前に Emacs へ適用したい設定は `~/.Xresources` に記述しています。
-
-```
-!! Disable XIM when using Emacs
-Emacs*useXIM: false
-
-Xft.dpi: 120
-
-!! doom-dracula theme
-Emacs.background: #282c36
-Emacs.foreground: #f8f8f2
-```
-
-| 設定項目 | 内容 |
-|---------|------|
-| `Emacs*useXIM: false` | XIM（X Input Method）を無効化。Fcitx / IBus との競合・入力遅延を防ぐ |
-| `Xft.dpi: 120` | Xft 経由のフォントレンダリング DPI をモニターに合わせて指定 |
-| `Emacs.background / foreground` | テーマ読み込み前のフレーム初期色。起動時の白フラッシュを防ぐ |
-
-設定変更後は以下で反映します。
-
-```
-xrdb -merge ~/.Xresources
-```
+X11 レベルの設定（XIM 無効化・DPI・初期背景色）は `~/.Xresources` に記述し、`xrdb -merge ~/.Xresources` で反映します。
 
 ### 2.2. [init.el] メイン初期化
 
@@ -174,11 +153,10 @@ xrdb -merge ~/.Xresources
 
 #### 2.2.1. バージョンチェックと起動高速化
 
-```code
+```elisp
 (when (version< emacs-version "29.1")
   (error "This requires Emacs 29.1 and above!"))
 
-;; file-name-handler-alist を一時無効化
 (defconst default-handlers file-name-handler-alist)
 (setq file-name-handler-alist nil)
 
@@ -188,16 +166,18 @@ xrdb -merge ~/.Xresources
             (setq gc-cons-threshold (* 16 1024 1024))
             (setq inhibit-message nil)
             (message "Emacs ready in %s with %d GCs."
-                     (emacs-init-time) gcs-done)))
+                     (emacs-init-time) gcs-done)
+            ;; 残存セッションファイルを削除
+            (mapc #'delete-file (file-expand-wildcards "~/.emacs.d/session.*"))))
 ```
 
-起動後は GC 閾値を 16MB に戻します。
+起動後は GC 閾値を 16MB に戻します。セッションファイルの残存も自動削除します。
 
 #### 2.2.2. パッケージシステム（leaf.el）
 
-`use-package` から [`leaf.el`](https://github.com/conao3/leaf.el) に全面移行しています。
+`use-package` から [`leaf.el`](https://github.com/conao3/leaf.el) に全面移行しています。`hydra` は `leaf-keywords` の前に初期化します。
 
-```code
+```elisp
 (eval-and-compile
   (customize-set-variable
    'package-archives '(("gnu"   . "https://elpa.gnu.org/packages/")
@@ -205,32 +185,31 @@ xrdb -merge ~/.Xresources
   (package-initialize)
   (use-package leaf :ensure t)
 
+  (leaf hydra :ensure t)
+
   (leaf leaf-keywords
     :ensure t
-    :init
-    (leaf hydra :ensure t)
     :config
     (leaf-keywords-init)))
+```
 
-(setq custom-file (locate-user-emacs-file "tmp/custom.el"))
+#### 2.2.3. init-loader と load-path
 
-(leaf *load-my-packages
-  :load-path "~/.emacs.d/elisp"
-  :require (my-dired my-github my-markdown my-template))
-
+```elisp
 (leaf init-loader
   :ensure t
+  :load-path "~/.emacs.d/elisp"   ;; ローカルパッケージのパス
   :config
   (setq init-loader-show-log-after-init 'error-only)
   (setq init-loader-byte-compile t)
   (init-loader-load))
 ```
 
-`eval-and-compile` ブロックでは leaf.el の初期化のみを行います。`custom-file` は `tmp/custom.el` に分離し、ローカルパッケージは `:load-path` を使って `elisp/` 配下から直接 `require` しています。`init-loader` は `eval-and-compile` の外に独立させ、`inits/` 配下のファイルをバイトコンパイルしながら順次読み込みます。
+`load-path` は `init-loader` の `:load-path` で一括指定しています。`inits/` 配下のファイルはバイトコンパイルしながら順次読み込みます。
 
-#### 2.2.3. サーバー・シェル環境
+#### 2.2.4. サーバー・シェル環境
 
-```code
+```elisp
 (leaf server
   :commands server-running-p
   :hook (emacs-startup-hook
@@ -252,8 +231,7 @@ xrdb -merge ~/.Xresources
 
 新しいパッケージのテストや Emacs が起動しない場合のデバッグ用です。
 
-```code
-;; .zshrc または .bashrc に追記
+```bash
 alias eq="emacs -q -l ~/.emacs.d/init-mini.el"
 ```
 
@@ -266,295 +244,270 @@ alias eq="emacs -q -l ~/.emacs.d/init-mini.el"
 
 ### 3.1. 基本設定
 
-```code
+```elisp
 (setq-default bidi-display-reordering nil)        ;; 右→左言語の処理を省略（高速化）
 (setq-default bidi-paragraph-direction 'left-to-right)
-(setq-default cursor-in-non-selected-windows nil) ;; 非アクティブウィンドウのカーソルを非表示
-(setq make-backup-files nil)                      ;; バックアップファイルを作らない
-(setq auto-save-default nil)                      ;; 自動保存を無効化
-(setq auto-save-list-file-prefix nil)
-(setq create-lockfiles nil)                       ;; ロックファイルを作らない
-(setq vc-follow-symlinks t)                       ;; シンボリックリンクを直接開く
-(setq completion-ignore-case t)                   ;; 補完で大文字小文字を区別しない
-(setq read-file-name-completion-ignore-case t)
-(setq scroll-preserve-screen-position t)          ;; スクロール時にカーソル位置を保持
-(setq ring-bell-function 'ignore)                 ;; 警告音・フラッシュを無効化
-(setq visible-bell nil)
-(setq mouse-drag-copy-region t)                   ;; マウス選択で自動コピー
-(setq delete-by-moving-to-trash t)                ;; 削除ファイルをゴミ箱へ
-(setq require-final-newline t)                    ;; ファイル末尾の改行を保証
-(setq next-line-add-newlines nil)                 ;; バッファ末尾での新行追加を禁止
-(setq uniquify-buffer-name-style 'post-forward-angle-brackets)
-(setq select-enable-clipboard t)                  ;; X11 クリップボードを使用
-(set-fringe-mode 1)                               ;; フリンジを最小化
+(setq make-backup-files        nil)   ;; バックアップファイルを作らない
+(setq auto-save-default        nil)   ;; 自動保存を無効化
+(setq create-lockfiles         nil)   ;; ロックファイルを作らない
+(setq vc-follow-symlinks       t)     ;; シンボリックリンクを直接開く
+(setq completion-ignore-case   t)     ;; 補完で大文字小文字を区別しない
+(setq scroll-preserve-screen-position t)
+(setq ring-bell-function      'ignore)
+(setq mouse-drag-copy-region   t)     ;; マウス選択で自動コピー
+(setq select-enable-clipboard  t)     ;; X11 クリップボードを使用
+(setq delete-by-moving-to-trash t)
+(setq trash-directory (locate-user-emacs-file "tmp/trash"))
+(set-fringe-mode 1)
 (defalias 'yes-or-no-p 'y-or-n-p)
-(defalias 'my-exit 'save-buffers-kill-emacs)
 ```
 
 ### 3.2. 履歴・データファイルの一元管理
 
 各種履歴やキャッシュファイルをすべて `~/.emacs.d/tmp/` 配下に集約しています。
 
-```code
+```elisp
 (setq auto-save-list-file-prefix  (locate-user-emacs-file "tmp/auto-save-list/.saves-"))
 (setq tramp-persistency-file-name (locate-user-emacs-file "tmp/tramp"))
-(setq transient-history-file      (locate-user-emacs-file "tmp/transient/history"))
-(setq project-list-file           (locate-user-emacs-file "tmp/projects"))
 (setq request-storage-directory   (locate-user-emacs-file "tmp/request"))
 (setq url-configuration-directory (locate-user-emacs-file "tmp/url"))
 (setq bookmark-default-file       (locate-user-emacs-file "tmp/bookmarks"))
 (setq save-place-file             (locate-user-emacs-file "tmp/places"))
-(setq savehist-file               (locate-user-emacs-file "tmp/history"))
-(setq recentf-save-file           (locate-user-emacs-file "tmp/recentf"))
-
-(setq savehist-additional-variables '(kill-ring))
-(setq history-delete-duplicates t)
+(setq project-list-file           (locate-user-emacs-file "tmp/projects"))
 ```
 
-### 3.3. 遅延モード有効化
+`savehist` は `extended-command-history` と `my-describe-history` も追加で永続化します。`recentf` は idleタイマー経由（0.5秒後）で有効化し、elpa・tmp・Dropbox/backup 配下は除外します。
 
-```code
+### 3.3. モード関連付けとグローバルマイナーモード
+
+```elisp
 (leaf *defer-modes
-  :mode (("\\.\\(?:z?shrc\\|bash_\\(?:profile\\|rc\\)\\|profile\\|zshenv\\|xprofile\\|Xmodmap\\)\\'" . sh-mode)
-         ("\\.\\(?:tmux\\.conf\\|muttrc\\)\\'" . conf-mode))
+  :mode (("\\.\\(?:tmux\\.conf\\|muttrc\\|xprofile\\|Xmodmap\\)\\'" . conf-mode)
+         ("\\.\\(?:gitattributes\\|gitignore\\|vimrc\\)\\'" . conf-mode)
+         ("/crontab\\(\\..*\\)?\\'" . conf-mode)
+         ("\\.cgi\\'" . perl-mode))
   :hook
   (after-init-hook . global-auto-revert-mode)
   (after-init-hook . save-place-mode)
-  (after-init-hook . savehist-mode)
-  (after-init-hook . recentf-mode)
-  (prog-mode-hook  . goto-address-prog-mode))
+  (after-init-hook . savehist-mode))
 ```
-
-`.zshrc` / `.muttrc` などのシェル・設定ファイルを適切なメジャーモードで開きます。
 
 ### 3.4. キーバインドとユーザー関数
 
-```code
-(leaf *user-configurations
-  :bind (("C-x C-c" . server-edit)
-         ("C-x b"   . ibuffer)
-         ("C-x m"   . neomutt)
-         ("M-,"     . xref-find-definitions)
-         ("M-w"     . clipboard-kill-ring-save)
-         ("C-w"     . my-clipboard-kill-region)
-         ("M-/"     . kill-current-buffer)
-         ("C-x /"   . delete-this-file)
-         ("s-c"     . clipboard-kill-ring-save)
-         ("s-v"     . clipboard-yank)
-         ("C-q"     . other-window-or-split)
-         ([muhenkan] . my-keyboard-quit)))
+```elisp
+(leaf user-configurations
+  :bind (("C-x C-c"    . server-edit)
+         ("C-x b"      . ibuffer)
+         ("C-x m"      . counsel-imenu)
+         ("M-,"        . xref-find-definitions)
+         ("M-w"        . clipboard-kill-ring-save)
+         ("C-w"        . my-clipboard-kill-region)
+         ("M-/"        . kill-current-buffer)
+         ("s-c"        . clipboard-kill-ring-save)
+         ("s-v"        . clipboard-yank)
+         ("C-q"        . other-window-or-split)
+         ("C-<tab>"    . quoted-insert)
+         ([muhenkan]   . my-muhenkan)
+         ("S-<return>" . (lambda () (interactive) (end-of-line) (newline)))))
 ```
 
-`C-x C-c` は誤操作防止のため `server-edit` に変更しています。`M-,` を `xref-find-definitions` に、`s-c` / `s-v` でスーパーキーによるクリップボードコピー・ペーストを追加しています。`delete-this-file` は現在編集中のファイルを確認後に削除してバッファも閉じます。
-
-最後のフレームを閉じようとしたとき、削除せず最小化する `handle-delete-frame` の上書きも設定しています。
+`C-x C-c` は誤操作防止のため `server-edit` に変更。`C-x m` は `counsel-imenu` に割り当て。最後のフレームを閉じようとしたとき、削除せず最小化する `handle-delete-frame` の上書きも設定しています。
 
 
 ## 4. ダッシュボード（01-dashboard.el）
 
 起動画面として `dashboard` を使用しています。
 
-```code
+```elisp
 (leaf dashboard
   :ensure t
   :if (display-graphic-p)
-  :hook ((emacs-startup-hook . open-dashboard)
-         (dashboard-mode-hook . (lambda () (set-window-margins (selected-window) 1 1))))
+  :hook ((emacs-startup-hook  . open-dashboard)
+         (dashboard-mode-hook . (lambda ()
+                                  (set-window-margins (selected-window) 2 2)
+                                  (page-break-lines-mode 1))))
   :bind ([home] . dashboard-toggle))
 ```
 
-マシン名が `P1` の場合は agenda も表示します。それ以外は recentf のみです。
+`[home]` キーで dashboard と直前のバッファをトグル表示できます。
 
-```code
+### 4.1. 今日の一句（seiho-haiku）
+
+`seiho-haiku.el`（`elisp/` 配下のローカルパッケージ）に阿波野青畝の俳句データ 366 句が収録されています。P1 マシンでは dashboard に「今日の一句」を表示します。
+
+```elisp
 (if (string-match "P1" (system-name))
-    (setq dashboard-items '((recents . 8) (agenda . 5)))
+    (setq dashboard-items '((haiku . 1) (recents . 5)))
   (setq dashboard-items '((recents . 5))))
 ```
 
-バナータイトルはシェルコマンドで動的に生成します。
+### 4.2. バナータイトルの動的生成
 
-```code
+```elisp
 (setq dashboard-banner-logo-title
-      (let* ((uname (split-string (shell-command-to-string "uname -rn")))
+      (let* ((uname  (split-string (shell-command-to-string "uname -rn")))
              (debian (string-trim (shell-command-to-string "cat /etc/debian_version"))))
         (format "GNU Emacs %s kernel %s Debian %s x86_64 GNU/Linux"
                 emacs-version (cadr uname) debian)))
 ```
 
-`[home]` キーで dashboard と直前のバッファをトグル表示できます。
+バナーには `~/.emacs.d/emacs.png` を使用しています。フッターには自作のメッセージと `nerd-icons` のホームアイコンを表示します。
 
 
-## 5. Git 関連（02-git.el）
-
-### 5.1. [git-peek] コミット差分の高速プレビュー
-
-Claude と共同開発した自作パッケージです。git 管理下のファイルの過去バージョンを ivy で選択し、左右分割のサイドバー UI でプレビューしながら `~/Dropbox/backup/tmp/` に保存できます。
-
-公開リポジトリを `:vc` でインストールしています。
-```elisp
-(leaf git-peek
-  :vc (:url "https://github.com/minorugh/git-peek")
-  :commands (git-peek git-peek-emergency-quit))
-```
-
-主な機能：
-
-* 現在のバッファがリポジトリ内のファイルに一致する場合は ivy をスキップして直接起動
-* 左サイドバーにコミット一覧、右にリアルタイムプレビュー
-* `s` で `YYYYMMDD_ファイル名` 形式で保存、`q` で元のウィンドウ配置に復元
-* `C-d` で全文表示 ↔ diff 表示をトグル
-* `git-peek-deleted` で削除済みファイルの過去バージョンも取り出せる
-* dimmer-mode が有効な場合は起動中に自動で一時停止
-
-セッション中にプレビューが残ってしまった場合に備え、`git-peek-emergency-quit` を定義しています。モードライン色の復元・dimmer の再有効化・バッファの強制削除を一括で行います。
-
-### 5.2. その他のユーティリティ
-
-* `gitk-open`：カレントディレクトリで gitk を起動
-* `my-tig`：gnome-terminal で tig を起動（リポジトリルートに自動移動）
-* `browse-at-remote`：カーソル位置の GitHub ページをブラウザで開く
-
-
-## 6. Evil Mode（03-evil.el）
+## 5. Evil Mode（02-evil.el）
 
 vi/vim スタイルの操作体系を導入しています。
 
-### 6.1. 基本方針
+### 5.1. 基本方針
 
 insert state は自動的に emacs state に変換します。これにより、insert 状態では通常の Emacs キーバインドがそのまま使えます。
 
-```code
+```elisp
 (defalias 'evil-insert-state 'evil-emacs-state)
 ```
 
-`[muhenkan]` キーはどんな状況からでも脱出・切替できる万能キーです。`my-muhenkan` として以下の優先順で動作します。
+誤操作を防ぐため、`i` 以外の編集トリガーキーをすべて無効化しています。
 
-```code
+```elisp
+(dolist (key '("I" "a" "A" "o" "O" "s" "S" "c" "C" "R"))
+  (define-key evil-normal-state-map key #'ignore))
+```
+
+`:q` / `:wq` は `kill-current-buffer` にマップし、Emacs 終了を防いでいます。
+
+### 5.2. [muhenkan] 万能脱出キー
+
+`my-muhenkan` は文脈に応じて動作します。
+
+```elisp
 (defun my-muhenkan ()
   (interactive)
   (cond
-   ((get-buffer "*git-peek-commits*") (git-peek-emergency-quit))
+   ;; *Help* バッファが開いていれば閉じる
+   ((get-buffer-window "*Help*")
+    (delete-window (get-buffer-window "*Help*"))
+    (kill-buffer "*Help*"))
+   ;; ミニバッファ操作中なら中断
    ((minibuffer-window-active-p (selected-window))
-    (minibuffer-keyboard-quit)
-    (when (minibuffer-window-active-p (selected-window))
-      (top-level)))
-   ((evil-normal-state-p) (evil-insert-state))
+    (abort-minibuffers))
+   ;; 別ウィンドウのミニバッファにフォーカスして中断
+   ((active-minibuffer-window)
+    (select-window (active-minibuffer-window))
+    (abort-recursive-edit))
+   ;; リージョンがあれば解除
    ((use-region-p) (deactivate-mark))
-   (current-input-method (deactivate-input-method))
-   (t (evil-normal-state) (message "-- NORMAL --"))))
+   ;; Normal → Emacs、それ以外 → Normal
+   ((evil-normal-state-p) (evil-emacs-state))
+   (t (deactivate-input-method)
+      (evil-normal-state))))
 ```
 
 | 状況 | 動作 |
 |------|------|
-| git-peek 起動中 | 強制終了（`git-peek-emergency-quit`） |
-| ミニバッファ使用中 | `minibuffer-keyboard-quit`（失敗時は `top-level`） |
-| evil normal state | emacs/insert state へ切替 |
+| `*Help*` バッファ表示中 | バッファを閉じる |
+| ミニバッファ使用中 | `abort-minibuffers` |
+| 別ウィンドウのミニバッファ | フォーカスして `abort-recursive-edit` |
 | リージョン選択中 | 選択解除 |
-| 入力メソッド有効時 | 入力メソッドを無効化 |
-| それ以外 | evil normal state へ戻る |
+| evil normal state | emacs state へ切替 |
+| それ以外 | IME を無効化して evil normal state へ |
 
-### 6.2. キーバインド（normal state）
+### 5.3. normal state のキーバインド
 
 | キー | コマンド |
 |------|---------|
-| `M-.` | nil（他用途のため無効化） |
 | `C-a` | seq-home（行頭→バッファ先頭） |
 | `C-e` | seq-end（行末→バッファ末尾） |
 | `C-w` | evil-delete-backward-word |
-| `SPC` | set-mark-command |
+| `SPC` | evil-scroll-down |
+| `b` | evil-scroll-up |
+| `@` | evil-visual-char |
 | `_` | evil-visual-line |
+| `?` | my-evil-cheat-sheet |
 | `[muhenkan]` | my-muhenkan |
 | `[home]` | dashboard-toggle |
 
-visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索、`d` でDeepL翻訳、`t` でGoogle翻訳が使えます。
+visual state では `PgUp`/`PgDn` で選択範囲を拡大・縮小、`;` でコメント、`c` でコピー、`s` で swiper、`g` で Google 検索、`d` で DeepL 翻訳が使えます。
 
-### 6.3. [evil-leader] リーダーキー
-
-リーダーキーは `,` です。
-
-| キー | コマンド |
-|------|---------|
-| `,0` / `,1` / `,2` / `,3` | ウィンドウ操作 |
-| `,o` | other-window-or-split |
-| `,w` | window-swap-states |
-| `,[` / `,]` | previous/next-buffer |
-| `,j` | evil-join-whitespace |
-| `,h` | hydra-diff/body |
-| `,,` / `,c` | org-capture |
-| `,SPC` | avy-goto-word-1 |
-| `,?` | vim cheat sheet |
-| `,.` | thunderbird |
-| `,n` | neomutt |
-| `,m` | make-frame |
-| `,_` | other-frame |
-| `,/` | delete-frame |
-| `,:` | thunar-open |
-
-### 6.4. j/k の挙動
+### 5.4. j/k の挙動
 
 折り返し行を自然に移動できるよう `j`/`k` と `gj`/`gk` を入れ替えています。
 
-```code
-(evil-swap-key evil-motion-state-map "j" "gj")
-(evil-swap-key evil-motion-state-map "k" "gk")
-```
+### 5.5. normal state リーダーキー「;」
+
+normal state を抜けずに軽微な編集を完結させるための仕組みです。
+
+| キー | コマンド |
+|------|---------|
+| `;f` | counsel-find-file |
+| `;;` | comment-line |
+| `;/` | kill-current-buffer |
+| `;:` | counsel-switch-buffer |
+| `;o` | 上に空行挿入（my-newline-above） |
+| `;c` | my-sen-cleanup |
+| `;r` | my-sen-restore |
+| `;w` | my-darkroom-toggle |
+| `;s` | swiper |
+| `;@` | 行頭に ◎ 挿入（俳句選者用） |
+| `;i` | Emacs state + mozc ON |
+
+### 5.6. [evil-cheat-sheet] チートシート
+
+`my-evil-cheat-sheet.el`（`elisp/` 配下）に `?` キーで呼び出せる evil キーバインドチートシートを定義しています。`i` で ivy ジャンプ、`m`/`e`/`o`/`v`/`n` でセクションジャンプ、`q` で終了できます。
 
 
-## 7. 補完・検索
+## 6. 補完・検索
 
-### 7.1. [counsel/ivy] 補完フレームワーク（04-counsel.el）
+### 6.1. [ivy] 補完フレームワーク（03-ivy.el）
 
-`ivy` / `counsel` を使用しています。
+`ivy` を使用しています。
 
-```code
-(leaf counsel :ensure t
+```elisp
+(leaf ivy
+  :ensure t
   :hook (after-init-hook . ivy-mode)
-  :bind (("C-:"     . counsel-switch-buffer)
-         ("C-x C-b" . counsel-switch-buffer)
-         ("M-x"     . counsel-M-x)
-         ("M-y"     . counsel-yank-pop)
-         ("M-:"     . counsel-buffer-or-recentf)
-         ("C-,"     . counsel-mark-ring)
-         ("s-a"     . counsel-ag)
-         ("C-x a"   . counsel-linux-app)
-         ("C-x C-f" . counsel-find-file)
-         ("C-x C-r" . counsel-recentf)))
+  :chord (("df" . my-describe-command)
+          ("fg" . my-describe-variable)))
 ```
 
-`C-x C-b` / `C-:` の両方を `counsel-switch-buffer` に、`M-:` を `counsel-buffer-or-recentf` に、`C-x a` を `counsel-linux-app` に割り当てています。選択行には独自のアロー表示を適用しています。
+`df` の同時押しで `my-describe-command`（コマンドをキーバインド付きで ivy 検索）、`fg` で `my-describe-variable`（変数を ivy 検索）を起動します。
 
-#### 7.1.1. counsel-ag の拡張
+#### 6.1.1. [ivy-rich] リッチ表示
 
-カーソル位置の単語を初期入力として使用し、プレフィックスなしの場合はカレントディレクトリを検索対象とします。2文字以上で検索が起動します。アクション `r` で検索ディレクトリを変更できます。
-
-#### 7.1.2. [avy] ジャンプ
-
-```code
-(leaf avy :ensure t
-  :bind ("C-r" . avy-goto-word-1))
-```
-
-#### 7.1.3. [ivy-rich] リッチ表示
-
-```code
+```elisp
 (leaf ivy-rich :ensure t
   :hook (after-init-hook . ivy-rich-mode))
 ```
 
-#### 7.1.4. [amx] M-x 履歴強化
+### 6.2. [counsel] 各種補完（04-counsel.el）
 
-```code
+```elisp
+(leaf counsel
+  :ensure t
+  :bind (("C-:"     . counsel-switch-buffer)
+         ("C-x C-f" . counsel-find-file)
+         ("C-x g"   . counsel-git)
+         ("s-a"     . counsel-git-grep)
+         ("M-x"     . counsel-M-x)
+         ("M-y"     . counsel-yank-pop)
+         ("C-,"     . counsel-mark-ring)))
+```
+
+`C-x g` でプロジェクト内のファイル検索、`s-a` でプロジェクト内の全文検索（`counsel-git-grep`）を行います。選択行には nerd-icons のシェブロンアイコンを使ったカスタム表示を適用しています。
+
+#### 6.2.1. [amx] M-x 履歴強化
+
+```elisp
 (leaf amx :ensure t
   :config
   (setq amx-save-file (locate-user-emacs-file "tmp/amx-items"))
   (setq amx-history-length 20))
 ```
 
-`counsel-M-x` と連携し、使用頻度の高いコマンドを優先表示します。履歴は `tmp/amx-items` に永続化します。
+`counsel-M-x` と連携し、使用頻度の高いコマンドを優先表示します。
 
-### 7.2. [swiper] インクリメンタル検索（05-swiper.el）
+#### 6.2.2. [swiper] インクリメンタル検索
 
-```code
+```elisp
 (leaf swiper :ensure t
   :bind (("C-s" . swiper-region)
          ("s-s" . swiper-thing-at-point)))
@@ -562,58 +515,53 @@ visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索
 
 `C-s` にバインドした `swiper-region` は、リージョン選択中は `swiper-thing-at-point`、非選択時は通常の `swiper` として機能します。
 
-#### 7.2.1. [migemo] 日本語インクリメンタル検索
+#### 6.2.3. [migemo] 日本語インクリメンタル検索
 
-```code
+```elisp
 (leaf migemo :ensure t
   :hook (after-init-hook . migemo-init)
   :config
   (setq migemo-command "/usr/bin/cmigemo")
   (setq migemo-options '("-q" "--emacs"))
-  (setq migemo-dictionary "/usr/share/cmigemo/utf-8/migemo-dict")
-  (setq migemo-coding-system 'utf-8-unix))
+  (setq migemo-dictionary "/usr/share/cmigemo/utf-8/migemo-dict"))
 ```
 
-`swiper` のみ `my-ivy-migemo-re-builder` を使い、ローマ字入力で日本語を検索できます。
+`swiper` のみ `my-ivy-migemo-re-builder` を使い、ローマ字入力で日本語を検索できます。スペースは `.*?` に変換され、複数キーワードの柔軟な検索が可能です。
 
-```code
-(setq ivy-re-builders-alist '((t . ivy--regex-plus)
-                              (swiper . my-ivy-migemo-re-builder)))
-```
+### 6.3. [company] 自動補完（05-company.el）
 
-スペースは `.*?` に変換されるため、複数キーワードの柔軟な検索が可能です。
-
-### 7.3. [company] 自動補完（05-company.el）
-
-```code
+```elisp
 (leaf company :ensure t
   :hook (after-init-hook . global-company-mode)
-  :bind (("<backtab>"   . company-complete)
-         ("C-<tab>"     . company-yasnippet)))
+  :bind (("<backtab>" . company-complete)
+         (:company-active-map
+          ("<tab>"      . company-complete-common-or-cycle)
+          ("<backtab>"  . company-select-previous)
+          ("<muhenkan>" . company-abort))))
 ```
 
 全バックエンドに yasnippet を自動付加する設定を入れています。
 
-### 7.4. [prescient] 補完候補の並び替え
+### 6.4. [yasnippet] スニペット
 
-`ivy-prescient` と `company-prescient` の両方を有効化し、使用頻度の高い候補を上位に表示します。履歴は `tmp/prescient-save` に永続化します。
-
-### 7.5. [yasnippet] スニペット
-
-```code
+```elisp
 (leaf yasnippet :ensure t
-  :hook (after-init-hook . yas-global-mode)
-  :config (setq yas-indent-line 'fixed))
+  :hook ((after-init-hook . yas-global-mode)
+         (prog-mode-hook  . yas-minor-mode))
+  :config
+  (setq yas-indent-line 'fixed)
+  (setq yas-snippet-dirs '("~/.emacs.d/snippets")))
 ```
 
 
-## 8. 日本語入力（07-mozc.el）
+## 7. 日本語入力（06-mozc.el）
 
-### 8.1. 基本設定
+### 7.1. 基本設定
 
-```code
+```elisp
 (leaf mozc :ensure t
-  :bind* ("<hiragana-katakana>" . my-toggle-input-method)
+  :bind* (("<hiragana-katakana>" . my-toggle-input-method)
+          ("<f13>"               . my-toggle-input-method))
   :bind (("s-m" . my-mozc-config)
          ("s-d" . my-mozc-word-regist)
          (:mozc-mode-map
@@ -621,179 +569,69 @@ visual state では `;` でコメント、`c` でコピー、`g` でGoogle検索
           ("." . (lambda () (interactive) (mozc-insert-str "。"))))))
 ```
 
-`my-toggle-input-method` は、evil-mode が有効なときに `<hiragana-katakana>` で IME を切り替えると同時に `evil-insert-state` に遷移します。句読点は mozc を介さず即時挿入します。
+`my-toggle-input-method` は evil-emacs-state のときのみ IME を切り替えます。句読点は mozc を介さず即時挿入します。`<f13>` でも同様の操作ができます。
 
-### 8.2. mozc ツール起動
+### 7.2. mozc ツール起動
 
 | キー | 機能 |
 |------|------|
-| `s-m` | 設定ダイアログ（`my-mozc-config`） |
-| `s-d` | 単語登録ダイアログ（`my-mozc-word-regist`） |
+| `s-m` | 設定ダイアログ |
+| `s-d` | 単語登録ダイアログ |
 
-### 8.3. カーソル色による IME 状態表示
+### 7.3. mozc-cand-posframe
 
-`mozc-cursor-color`（`minorugh/mozc-cursor-color`、`:vc` でインストール）で IME のオン・オフをカーソル色で視覚的に示します。
+変換候補を `posframe` でポップアップ表示します。doom-dracula テーマに合わせた配色を設定しています。
 
-### 8.4. 候補表示
+### 7.4. カーソル色による状態表示
 
-`mozc-popup` で変換候補をポップアップ表示します。
+evil state と mozc の状態をカーソル色で視覚的に示します。0.1 秒のアイドルタイマーで更新します。
 
-### 8.5. mozc_emacs_helper 互換パッチ
-
-`mozc-protobuf-get` に `advice-add` でパッチを当て、`mozc_emacs_helper` の仕様変更後も動作するようにしています。
-
-
-## 9. ハイライト・表示（07-highlight.el）
-
-### 9.1. [goggles] 編集領域のフラッシュ
-
-`volatile-highlights` の代替として `goggles` を使用しています。編集（追加・変更・削除）直後の領域をカラーでフラッシュします。
-
-```code
-(leaf goggles :ensure t
-  :hook ((prog-mode-hook . goggles-mode)
-         (text-mode-hook . goggles-mode))
-  :config (setq-default goggles-pulse t))
-```
-
-### 9.2. [paren] 対応括弧のハイライト
-
-```code
-(leaf paren :ensure nil
-  :hook (after-init-hook . show-paren-mode)
-  :config
-  (setq show-paren-style 'parenthesis)
-  (setq show-paren-when-point-inside-paren t)
-  (setq show-paren-when-point-in-periphery t))
-```
-
-### 9.3. [rainbow-delimiters] 括弧のレインボー表示
-
-`prog-mode` で括弧の深さに応じて色分けします。
-
-### 9.4. [aggressive-indent] 即時インデント整形
-
-`global-aggressive-indent-mode` で有効化し、`html-mode` のみ除外しています。
-
-### 9.5. [web-mode] Web テンプレート編集
-
-`.js` / `.jsx` / `.html` / `.php` ファイルに適用します。`web-mode-enable-auto-indentation nil` で自動インデントを無効にしています。
-
-### 9.6. electric-pair
-
-`text-mode` では `electric-pair-local-mode` を無効化します（yasnippet との競合回避）。
+| 状態 | カーソル色 |
+|------|---------|
+| normal state | `#50fa7b`（緑） |
+| emacs state / mozc OFF | `#BD93F9`（紫） |
+| emacs state / mozc ON | `#ff9580`（オレンジ） |
+| read-only | `#6272A4`（グレー青） |
+| visual state | `#F1FA8C`（黄） |
 
 
-## 10. Dimmer の代替：アクティブウィンドウのモードライン色強調（30-ui.el）
+## 8. 外部ツール・SSH（07-functions.el）
 
-dimmer-mode の代わりに、分割時のアクティブウィンドウをモードライン色で視覚的に示す方式に変更しました。
+F1〜F12 キーのバインドをここで一元管理しています。
+
+| キー | コマンド |
+|------|---------|
+| `<f1>` | help-command（built-in） |
+| `<f2>` | my-remote-select（SSH 接続先選択） |
+| `<f3>` | terminal-open-this（gnome-terminal） |
+| `<f4>` | xsrv-open-this（SSH でサーバーに接続） |
+| `<f5>` | quickrun |
+| `<f6>` | thunar-open-this |
+| `<f7>` | neotree-toggle |
+| `<f8>` | my-darkroom-toggle |
+| `<f9>` | display-line-numbers-mode |
+| `<f10>` | toggle-scratch-buffer |
+| `<f11>` | toggle-frame-fullscreen |
+| `<f12>` | toggle-emacs（最小化/復元スクリプト） |
+
+### 8.1. my-remote-select
+
+`<f2>` で SSH 接続先のディレクトリを `completing-read` で選択し、gnome-terminal で接続します。gospel-haiku・minorugh.com のサブディレクトリや Docker コンテナへのアクセスに使います。
+
+### 8.2. xsrv-open-this
+
+`<f4>` で現在のバッファが `~/Dropbox/GH/` または `~/Dropbox/minorugh.com/` 配下なら、対応するサーバーパスに自動的に変換して SSH ターミナルを開きます。
+
+### 8.3. toggle-scratch-buffer
+
+`<f10>` で `*scratch*` バッファと直前のバッファをトグルします。
+
+
+## 9. 編集サポート（08-edit.el）
+
+### 9.1. [super-save] スマート自動保存
+
 ```elisp
-(defun my-update-modeline-color ()
-  "Highlight with mode line color when split, restore default when one window."
-  (if (or (one-window-p)
-          (bound-and-true-p hydra-curr-map)
-          (minibuffer-window-active-p (minibuffer-window))
-          (get-buffer-window "*compilation*"))
-      (set-face-attribute 'mode-line nil :background 'unspecified)
-    (set-face-attribute 'mode-line nil :background "#852941")))
-(add-hook 'window-configuration-change-hook #'my-update-modeline-color)
-```
-
-ウィンドウが分割されているときはアクティブウィンドウのモードラインを `#852941`（ワインレッド）に着色し、1ウィンドウ時・hydra 起動中・ミニバッファ使用中・compilation バッファ表示中はデフォルト色に戻します。
-
-
-## 11. ユーティリティ関数（09-funcs.el）
-
-### 11.1. compilation バッファの自動クローズ
-
-```code
-(defun compile-autoclose (buffer string)
-  (if (and (string-match "compilation" (buffer-name buffer))
-           (string-match "finished" string))
-      (progn
-        (delete-other-windows)
-        (message "Compile successful."))
-    (message "Compilation exited abnormally: %s" string)))
-
-(setq compilation-finish-functions #'compile-autoclose)
-(setq compilation-scroll-output t)
-(setq compilation-always-kill t)
-```
-
-### 11.2. ps-print 設定
-
-`lpr` コマンドが存在する場合のみ設定します。A4・Courier・行番号付きで印刷します。
-
-### 11.3. Gist 連携
-
-```code
-(defun gist-region-or-buffer ()
-  "リージョン選択時はリージョンを、非選択時はバッファ全体を gist に投稿する。"
-  ...)
-```
-
-`gist -o` でポスト後の URL をブラウザで自動表示します。
-
-
-## 12. リージョン選択サポート（10-selected.el）
-
-`selected.el` でリージョン選択時のワンキーアクションを設定しています。
-
-```code
-(leaf selected :ensure t
-  :hook (after-init-hook . selected-global-mode)
-  :bind (:selected-keymap
-         (";" . comment-dwim)
-         ("c" . clipboard-kill-ring-save)
-         ("s" . swiper-thing-at-point)
-         ("d" . deepl-translate)
-         ("t" . google-translate-auto)
-         ("w" . my:weblio)
-         ("g" . my:google-this)))
-```
-
-リージョン選択開始時に IME を自動 OFF、解除時に元の状態に戻します。
-
-`google-this` パッケージで `my:google-this` を定義し、`C-c g` および visual state の `g` にバインドしています。
-
-
-## 13. 構文チェック（20-check.el）
-
-### 13.1. [flycheck] 構文エラー表示
-
-`flymake` から `flycheck` に移行しています。
-
-```code
-(leaf flycheck :ensure t
-  :hook ((prog-mode-hook . flycheck-mode)
-         (gfm-mode-hook  . flycheck-mode))
-  :bind ("C-c f" . flycheck-list-errors))
-```
-
-leaf-keywords の `"Unrecognized keyword"` エラーを回避するため `flycheck-emacs-lisp-package-initialize-form` を設定しています。
-
-### 13.2. [textlint] 文章の lint
-
-markdown / gfm / org / web-mode 対象の `textlint` チェッカーを `flycheck-define-checker` で定義しています。
-
-### 13.3. [ispell / hunspell] スペルチェック
-
-```code
-(setq ispell-program-name "hunspell")
-(setq ispell-really-hunspell t)
-(add-to-list 'ispell-skip-region-alist '("[^\000-\377]+"))
-```
-
-日本語文字コード範囲はスキップします。
-
-
-## 14. 編集サポート（20-edit.el）
-
-### 14.1. [super-save] スマート自動保存
-
-`auto-save-buffers-enhanced` から `super-save` に移行しました。
-
-```code
 (leaf super-save :ensure t
   :hook (after-init-hook . super-save-mode)
   :config
@@ -803,68 +641,118 @@ markdown / gfm / org / web-mode 対象の `textlint` チェッカーを `flychec
   (setq super-save-exclude             '(".gpg")))
 ```
 
-アイドル1秒で自動保存します。リモートファイルと `.gpg` は除外します。
+アイドル 1 秒で自動保存します。リモートファイルと `.gpg` は除外します。
 
-### 14.2. [imenu-list] サイドバー目次
+### 9.2. scratch バッファの永続化
 
-```code
-(leaf imenu-list :ensure t
-  :bind ([f2] . imenu-list-smart-toggle)
-  :config
-  (setq imenu-list-focus-after-activation t)
-  (setq imenu-list-auto-resize t)
-  (setq imenu-list-position 'left))
-```
+外部パッケージを使わず、`kill-emacs-hook` と `after-init-hook` で自前で実装しています。シャットダウン時に `tmp/scratch` に書き出し、起動時に読み込みます。
 
-### 14.3. [atomic-chrome] ブラウザとの連携
+### 9.3. [undo-fu] / [undohist]
 
-```code
-(leaf atomic-chrome :ensure t
-  :hook (after-init-hook . atomic-chrome-start-server)
-  :config (setq atomic-chrome-buffer-open-style 'full))
-```
-
-ブラウザのテキストエリアを Emacs でフルフレーム編集できます。
-
-### 14.4. [undo-fu] シンプルな undo/redo
-
-```code
+```elisp
 (leaf undo-fu :ensure t
   :bind (("C-_" . undo-fu-only-undo)
          ("C-/" . undo-fu-only-redo)))
+
+(leaf undohist :ensure t
+  :hook (after-init-hook . undohist-initialize)
+  :config
+  (setq undohist-directory (locate-user-emacs-file "tmp/undohist")))
 ```
 
-evil の undo システムも `undo-fu` に統一しています（`evil-undo-system 'undo-fu`）。
+evil の undo システムも `undo-fu` に統一しています（`evil-undo-system 'undo-fu`）。undo 履歴は `tmp/undohist/` に永続化します。
 
-### 14.5. [undohist] undo 履歴の永続化
+### 9.4. [tempbuf] 未使用バッファの自動削除
 
-undo 履歴を `tmp/undohist/` に保存し、ファイルを開き直しても undo できます。
+```elisp
+(leaf tempbuf
+  :vc (:url "https://github.com/minorugh/tempbuf")
+  :hook ((find-file-hook  . turn-on-tempbuf-mode)
+         (dired-mode-hook . turn-on-tempbuf-mode)))
+```
 
-### 14.6. その他
+使われていないバッファをバックグラウンドで自動 kill します。xsrv rsync lock 機能と連携しています。
 
-* `iedit`（`<insert>`）：複数箇所の同時編集
-* `expand-region`（`C-@`）：選択範囲を賢く拡張
-* `ediff`：水平分割・シンプルモードで差分編集
-* `sudo-edit`：現在のファイルを root 権限で編集
+### 9.5. リージョン選択サポート
+
+`selected.el` の代わりに `my-selected-mode`（自作マイナーモード）でリージョン選択時のワンキーアクションを実装しています。
+
+```elisp
+(define-key my-selected-mode-map (kbd ";") #'comment-dwim)
+(define-key my-selected-mode-map (kbd "c") #'kill-ring-save)
+(define-key my-selected-mode-map (kbd "s") #'swiper-region)
+(define-key my-selected-mode-map (kbd "g") #'my-google-search)
+(define-key my-selected-mode-map (kbd "w") #'my-weblio-search)
+(define-key my-selected-mode-map (kbd "d") #'deepl-translate)
+```
+
+リージョン選択開始時に IME を自動 OFF、解除時に元の状態に戻します。
+
+### 9.6. [flymake] 構文チェック
+
+`flycheck` から `flymake`（built-in）に戻しています。`prog-mode` と `markdown-mode` で有効化します。
 
 
-## 15. UI・外観（30-ui.el）
+## 10. Makefile 連携（09-make.el）
 
-### 15.1. テーマ
+### 10.1. compile-autoclose
+
+コンパイル成功時にウィンドウを自動クローズします。`##>` マーカーがある場合はメッセージを抽出してエコーエリアに表示します。`##>` 単体（空）のときはバッファを全画面表示します。
+
+### 10.2. Ivy 統合 Makefile ターゲット選択
+
+`@` キー（makefile-mode・dired-mode）で Ivy による Makefile ターゲット選択を起動します。`## コメント` がついたターゲットのみ一覧表示し、矢印キーでリアルタイムプレビュー、`C-c C-c` で実行します。
+
+
+## 11. UI・外観（10-ui.el）
+
+### 11.1. テーマ
 
 `doom-themes` の `doom-dracula` を使用しています。
 
-```code
+```elisp
 (leaf doom-themes :ensure t
   :hook (after-init-hook . (lambda () (load-theme 'doom-dracula t)))
-  :config
-  (setq doom-themes-enable-italic nil)
-  (doom-themes-org-config))
+  :config (setq doom-themes-enable-italic nil))
 ```
 
-### 15.2. [doom-modeline] モードライン
+### 11.2. カーソルとハイライト
 
-```code
+`hl-line`（built-in）でカーソル行をハイライトします。region の背景色と hl-line をテーマに合わせてカスタムしています。`blink-cursor` は無限点滅（`blink-cursor-blinks 0`）・0.3 秒間隔に設定しています。
+
+### 11.3. [nerd-icons]
+
+`all-the-icons` から `nerd-icons` に移行しました。`nerd-icons-dired` で dired バッファにアイコンを表示します。
+
+初回は `M-x nerd-icons-install-fonts` でフォントをインストールしてください。
+
+### 11.4. 行番号・fill-column インジケーター
+
+`display-line-numbers`（built-in）を `prog-mode` / `text-mode` で有効化します（`lisp-interaction-mode` は除外）。`<f9>` でトグルできます。
+
+`display-fill-column-indicator`（built-in）を gfm-mode / text-mode で有効化し、79 列目にガイドラインを表示します。
+
+### 11.5. 対応括弧のハイライト
+
+```elisp
+(leaf paren :tag "builtin"
+  :hook (after-init-hook . show-paren-mode)
+  :config
+  (setq show-paren-style                  'parenthesis)
+  (setq show-paren-when-point-inside-paren t)
+  (setq show-paren-when-point-in-periphery t))
+
+(leaf rainbow-delimiters :ensure t
+  :hook (prog-mode-hook . rainbow-delimiters-mode))
+```
+
+### 11.6. [whitespace] 行末スペースの表示と削除
+
+`global-whitespace-mode` で行末スペースを赤くハイライトします。`C-c s`（`my-cleanup-for-spaces-safe`）で行末空白を削除し、UTF-8 エンコーディングを保証します。
+
+### 11.7. [doom-modeline] モードライン
+
+```elisp
 (leaf doom-modeline :ensure t
   :hook (after-init-hook . doom-modeline-mode)
   :config
@@ -875,316 +763,57 @@ undo 履歴を `tmp/undohist/` に保存し、ファイルを開き直しても 
   (column-number-mode 0))
 ```
 
-### 15.3. [nerd-icons] アイコン表示
+### 11.8. アクティブウィンドウのモードライン強調
 
-`all-the-icons` から `nerd-icons` に移行しました。`nerd-icons-dired` で dired バッファにアイコンを表示します。
-
-初回は `M-x nerd-icons-install-fonts` でフォントをインストールしてください。
-
-### 15.4. [hide-mode-line] モードラインの非表示
-
-imenu-list と neotree のバッファではモードラインを非表示にします。
-
-### 15.5. 行番号表示
-
-`display-line-numbers`（built-in）を `prog-mode` / `text-mode` で有効化します。`[f9]` でトグルできます。
-
-### 15.6. [whitespace] 不要スペースの除去
-
-`my:cleanup-for-spaces-safe`（`C-c C-c`）で行末の空白・タブ・NBSP・ゼロ幅スペースと末尾の空行をまとめて削除します。
-
-### 15.7. 折り返し列インジケーター
-
-`display-fill-column-indicator`（built-in）を gfm / text-mode で有効化し、79列目にガイドラインを表示します。
+dimmer-mode の代わりに、分割時のアクティブウィンドウをモードライン（紫ボーダー）で視覚的に示す方式を採用しています。minibuffer・hydra・Flymake・Compilation・which-key のポップアップウィンドウはカウントから除外します。
 
 
-## 16. ユーティリティ（30-utils.el）
+## 12. ユーティリティ（20-utils.el）
 
-### 16.1. [which-key] キーバインドのポップアップ
+### 12.1. [which-key]
 
-Emacs 29 built-in になりました。`which-key-delay 0.0` で即時表示します。
+Emacs 29 built-in になりました。`which-key-idle-delay 0.0` で即時表示します。
 
-### 16.2. [key-chord] 同時押しキーバインド
+### 12.2. [key-chord]
 
-`elisp/key-chord/` のローカルパッケージを使用しています。
+MELPA 版からフォーク版（`minorugh/key-chord`）に切り替えています。`sit-for` を `read-event` タイムアウトに変更し、重いバッファでのスタールを修正しています。
 
 | chord | コマンド |
 |-------|---------|
-| `df` | counsel-descbinds |
 | `l;` | init-loader-show-log |
+| `df` | my-describe-command（03-ivy.el） |
+| `fg` | my-describe-variable（03-ivy.el） |
+| `..` | hydra-browse/body（70-hydra-browse.el） |
+| `@@` | howm-list-all（50-howm.el） |
+| `,,` | my-howm-create-with-category（50-howm.el） |
+| `p@` | hydra-package/body |
 
-### 16.3. [counsel-tramp] リモートファイル編集
+### 12.3. [sequential-command] バッファ端への移動
 
-`scp` メソッドで xsrv サーバーへのクイック接続を設定しています。
-
-### 16.4. [viewer] view-mode のモードライン色変更
-
-view-mode 時にモードラインの色を変えて視覚的に区別します。
-
-### 16.5. [persistent-scratch] scratch バッファの永続化
-
-`auto-save-buffers-enhanced` の scratch 保存機能を `persistent-scratch` に移行しました。
-
-```code
-(leaf persistent-scratch :ensure t
-  :hook (after-init-hook . persistent-scratch-autosave-mode)
-  :bind ("S-<return>" . toggle-scratch))
-```
-
-`S-<return>` で scratch バッファと直前のバッファをトグルします。
-
-### 16.6. [bs] バッファ循環
-
-`M-]` / `M-[` でバッファを順番に切り替えます。
-
-### 16.7. [projectile] プロジェクト管理
-
-```code
-(leaf projectile :ensure t
-  :hook (after-init-hook . projectile-mode))
-```
-
-### 16.8. [sequential-command] バッファ端への移動
-
-`elisp/sequential-command/` のローカルパッケージを使用しています。
+フォーク版（`minorugh/sequential-command`）を `:vc` でインストールしています。
 
 * `C-a` を連続で押すと 行頭 → バッファ先頭 → 元の位置
 * `C-e` を連続で押すと 行末 → バッファ末尾 → 元の位置
 
+### 12.4. [quickrun]
 
-## 17. Hydra メニュー
+`<f5>` で現在のバッファを実行します。
 
-### 17.1. [hydra-dired] ディレクトリ・ランチャー（40-hydra-dired.el）
+### 12.5. パッケージ管理 hydra
 
-`M-.` で起動します。ディレクトリへのクイックアクセスと外部アプリの起動をまとめています。
-
-主な機能：
-
-* `my:make`：`make <target>` を指定ディレクトリで実行
-* `my:open`：ファイル・ディレクトリをオプションで top/bottom 指定して開く
-* `my:reload-keychain`：keychain の SSH_AUTH_SOCK を Emacs セッションに再読み込み
-* `fzilla-*`：FileZilla を特定サイトで起動
-* `keepassxc`：KeePassXC を起動
-
-`hydra-work`（`<henkan>`）と相互トグルできます。
-
-### 17.2. [hydra-work] 作業メニュー（40-hydra-menu.el）
-
-`<henkan>` で起動します。俳句・文芸関係のワークスペースへのショートカットが中心です。
-
-主な機能：
-
-* `terminal-open`（`[f3]`）：カレントディレクトリで gnome-terminal を開き、`xdotool` で隣接ディスプレイに移動
-* `thunar-open`（`[f6]`）：カレントディレクトリで Thunar を開き、同様に移動
-* `xsrv-gh`（`[f4]`）：xsrv への SSH 接続ターミナルを起動
-* `my:run-myjob`：外部スクリプト `myjob.sh` を非同期実行
-* 各種文芸ファイルへのクイックアクセス
-
-### 17.3. [hydra-browse] ブラウザランチャー（40-hydra-misc.el）
-
-`..`（key-chord）で起動します。お気に入りサイトへのワンキーアクセスです。
-
-### 17.4. [hydra-package] パッケージ管理
-
-`@@`（key-chord）で起動します。Emacs 29 の built-in パッケージ管理コマンドを利用します。
+`p@` で起動します。
 
 ```
-i)nstall  d)elete  u)pgrade  a)ll-upgrade  v)c-update-all
+Package: _l_og  _i_nstall  _d_elete  _u_pgrade  up-_a_ll  _v_c-up-all
 ```
 
-### 17.5. [hydra-markdown] Markdown 編集
+### 12.6. Gist / Lepton 連携
 
-`40-hydra-misc.el` で定義しています。markdown-mode から呼び出します。
+`gist-region-or-buffer` でリージョンまたはバッファ全体を Gist に投稿します。`open-lepton` で Lepton（GitHub Gist クライアント）を起動します。
 
-```
-i)talic  x)消線  n)footnote  t)able  m)arkup  v)iew  e)xport  p)df  d)ocx
-```
+### 12.7. YaTeX（LaTeX 編集）
 
-
-## 18. Dired（50-dired.el）
-
-### 18.1. 基本設定
-
-`ls-lisp` を使用することで外部 `ls` コマンドに依存しない構成にしています。
-
-```code
-(setq ls-lisp-use-insert-directory-program nil)
-(setq ls-lisp-dirs-first t)        ;; ディレクトリを先頭に表示
-(setq dired-listing-switches "-AFl")
-(setq dired-omit-files "^\\.$\\|^\\.[^\\.].*$\\|\\.elc$")
-```
-
-### 18.2. キーバインド
-
-| キー | 機能 |
-|------|------|
-| `<left>` | 親ディレクトリへ（バッファ増やさない） |
-| `<right>` / `RET` | 状況に応じて開く（ファイルは新バッファ、ディレクトリは同バッファ） |
-| `w` | wdired モード |
-| `s` | sudo-edit |
-| `o` | xdg-open で関連アプリで開く |
-| `i` | sxiv で画像一覧表示 |
-| `a` | dired-omit-mode トグル |
-
-### 18.3. sxiv 連携
-
-`call-sxiv` でディレクトリ内の画像（jpg / png / gif / bmp）を `sxiv` でサムネイル一覧表示します。
-
-
-## 19. Neotree（50-neotree.el）
-
-```code
-(leaf neotree :ensure t
-  :after projectile
-  :bind (("<f10>" . my:neotree-find)))
-```
-
-`doom-themes-neotree-config` でテーマと統合しています。
-
-ファイルを開いたら neotree を自動で閉じ `dimmer-on` します（`neotree-enter-hide`）。起動時にテキストを1段階縮小します（`neotree-text-scale`）。
-
-
-## 20. メモ環境
-
-### 20.1. [howm] Wiki 型メモ（60-howm.el）
-
-```code
-(leaf howm :ensure t
-  :hook (emacs-startup-hook . howm-mode))
-```
-
-メモは `~/Dropbox/howm/` に Markdown 形式（`.md`）で保存します。ファイル名は `%Y/%m/%Y%m%d%H%M.md` の形式です。
-
-#### 20.1.1. カテゴリ色分け
-
-`howm-user-font-lock-keywords` で以下のカテゴリを色分けしています。
-
-`memo:` / `note:` / `tech:` / `教会:` / `園芸:` / `日記:` / `創作:`
-
-#### 20.1.2. メモ作成
-
-テンプレートを3種類定義しています。
-
-| 関数 | テンプレート |
-|------|------------|
-| `my:howm-create-memo`（summary の `,`） | `# memo:` |
-| `my:howm-create-tech`（summary の `;`） | `# tech:` |
-
-メモ作成後は自動的に `delete-other-windows` + `evil-emacs-state` に遷移します。
-
-#### 20.1.3. super-save との連携
-
-`my:howm-fix-after-super-save` で、howm ファイル保存時に Perl スクリプト（`howm-fix-code-comments.pl`）を実行してコードコメントを自動修正します。
-
-#### 20.1.4. migemo 連携
-
-`howm-use-migemo t` でローマ字入力による日本語検索が可能です。
-
-### 20.2. [org] タスク管理（60-org.el）
-
-org-agenda を使ったタスク管理に限定して使用しています。タスクファイルは `~/Dropbox/howm/org/task.org` です。
-
-`org-capture-templates` で howm ファイルへ直接書き込むテンプレートを多数定義しています。
-
-| キー | カテゴリ |
-|------|---------|
-| `d` | 日記 |
-| `w` | 創作 |
-| `e` | 園芸 |
-| `c` | 教会 |
-| `m` | Memo |
-| `i` | Idea |
-| `t` | Tech |
-| `j` | Junk（Perl スクリプト） |
-| `,` | Task（task.org） |
-
-`org-capture` 起動時は全画面表示し `evil-emacs-state` に遷移します。
-
-### 20.3. [calendar / japanese-holidays]
-
-`[f7]` でカレンダーをトグル表示します。土日祝日を色分けして表示します。
-
-### 20.4. [persistent-scratch] scratch バッファ
-
-`S-<return>` で scratch バッファと直前のバッファをトグルします（`30-utils.el` 参照）。
-
-
-## 21. Markdown 編集（60-markdown.el）
-
-### 21.1. 基本設定
-
-```code
-(leaf markdown-mode :ensure t
-  :mode (("README\\.md\\'" . gfm-mode)
-         ("\\.md\\'"       . markdown-mode)))
-```
-
-### 21.2. プレビュー
-
-`pandoc` + Chrome でプレビューします。カスタム CSS（`markdown-cream.css`）と `highlight.js` を使ったシンタックスハイライト付きです。
-
-```code
-(setq markdown-command
-      "pandoc -f markdown+header_attributes-raw_html -t html5")
-(setq browse-url-generic-program "google-chrome")
-```
-
-### 21.3. howm コードコメント修正
-
-`my:howm-fix-code-comments`（`C-c #`）で howm ファイルのコードブロック内の `# ` を `## ` に置換します。リージョン選択時はバッファ内処理、非選択時は Perl スクリプト経由で処理します。
-
-### 21.4. PDF・docx 変換
-
-| 関数 | 変換先 |
-|------|-------|
-| `md2pdf` | pandoc + lualatex で PDF 生成 → `xdg-open` で表示 |
-| `md2docx` | pandoc で docx 生成 → `xdg-open` で表示 |
-
-`hydra-markdown` から呼び出せます。
-
-### 21.5. その他
-
-* `my:delete-tmp-markdown-html`：markdown バッファを閉じると `/tmp/burl*.html` を自動削除
-* `gen-toc-term`：Perl スクリプトで目次を生成し gnome-terminal で表示
-
-
-## 22. 翻訳（70-translate.el）
-
-### 22.1. [deepl-translate] DeepL API 翻訳
-
-自作パッケージ（`elisp/deepl-translate/` 配下）です。
-
-```code
-(leaf deepl-translate
-  :bind ("C-c d" . deepl-translate))
-```
-
-API キーは `~/Dropbox/backup/tokens/deepl-api.el` から読み込みます。2026-03-10 の DeepL API 仕様変更（認証方式を Authorization ヘッダー方式に変更）に対応済みです。
-
-### 22.2. [google-translate] Google 翻訳
-
-```code
-(leaf google-translate :ensure t
-  :bind ("C-c t" . google-translate-auto))
-```
-
-`google-translate-auto` は日本語↔英語を自動判定して翻訳します。
-
-### 22.3. [deepl-translate-web] ブラウザで DeepL
-
-```code
-(leaf deepl-translate-web
-  :bind ("C-c w" . my:deepl-translate))
-```
-
-リージョン・文・カーソル位置から対象テキストを取得し、DeepL の Web サイトをブラウザで開きます。
-
-
-## 23. YaTeX（70-yatex.el）
-
-LaTeX 編集環境です。
-
-```code
+```elisp
 (leaf yatex :ensure t
   :mode ("\\.tex\\'" "\\.sty\\'" "\\.cls\\'")
   :config
@@ -1192,70 +821,359 @@ LaTeX 編集環境です。
   (setq dviprint-command-format "dvpd.sh %s"))
 ```
 
-`dvpd.sh` は `dvipdfmx` で PDF を生成して `evince` で表示するシェルスクリプトです。
-
-| キー | コマンド |
-|------|---------|
-| `M-c` | YaTeX-typeset-buffer（コンパイル） |
-| `M-v` | YaTeX-lpr（dvpd.sh 実行） |
+`dvpd.sh` は `dvipdfmx` で PDF を生成して `evince` で表示するシェルスクリプトです。`M-c` でコンパイル、`M-v` で PDF 表示します。
 
 
-## 24. 執筆モード（80-darkroom.el）
+## 13. Dired（30-dired.el）
 
-`[f8]` で darkroom モードに入ります。
+### 13.1. 基本設定
 
-```code
-(defun my:darkroom-in ()
-  (diff-hl-mode 0)
-  (display-line-numbers-mode 0)
-  (darkroom-tentative-mode 1)
-  (toggle-frame-fullscreen)
-  (setq-local line-spacing .2)
-  (evil-emacs-state))
-
-(defun my:darkroom-out ()
-  (darkroom-tentative-mode 0)
-  (display-line-numbers-mode 1)
-  (diff-hl-mode 1)
-  (toggle-frame-fullscreen)
-  (setq-local line-spacing 0)
-  (evil-normal-state))
+```elisp
+(setq dired-listing-switches "-AlhF --group-directories-first --no-group")
+(setq dired-omit-files       "^\\.$\\|^\\.[^\\.].*$\\|\\.elc$")
+(setq dired-dwim-target t)
+(setq dired-recursive-copies  'always)
+(setq dired-recursive-deletes 'always)
 ```
 
-IN 時：diff-hl・行番号を非表示にし、全画面・行間を広げて `evil-emacs-state` へ遷移します。
+### 13.2. キーバインド
 
-OUT 時（`[f8]` で戻る）：すべて元に戻し `evil-normal-state` へ遷移します。
+| キー | 機能 |
+|------|------|
+| `<left>` | 親ディレクトリへ（同バッファ） |
+| `<right>` / `RET` | ファイルは新バッファ、ディレクトリは同バッファ |
+| `w` | wdired モード |
+| `s` | sudo で削除 |
+| `o` | xdg-open で関連アプリで開く |
+| `a` | dired-omit-mode トグル |
+| `[` | hide-details-mode |
+| `t` | my-open-tig |
+| `]` | gitk |
+| `p` | パーミッション早見表 |
+| `.` | xsrv deploy |
+| `,` | xsrv download |
+| `i` | sxiv で画像一覧 |
+
+### 13.3. omit モードの制御
+
+特定ディレクトリ（`~/`・dotfiles・xsrv-GH・src など）では omit を無効化し、隠しファイルを表示します。
+
+### 13.4. パーミッション早見表
+
+`p` キーで `*Permission Help*` バッファを右サイドバーに表示します。
 
 
-## 25. ブログ管理（90-easy-hugo.el）
+## 14. リモート・xsrv 連携（40-remote.el）
+
+xsrv（Xserver）との連携設定をすべてここに集約しています。
+
+### 14.1. xsrv ルート判定
+
+```elisp
+(defconst my-xsrv-roots
+  `((,(expand-file-name "~/src/github.com/minorugh/xsrv-GH/")
+     . ,(expand-file-name "~/Dropbox/GH/"))
+    (,(expand-file-name "~/src/github.com/minorugh/xsrv-minorugh/")
+     . ,(expand-file-name "~/Dropbox/minorugh.com/"))))
+```
+
+xsrv-GH・xsrv-minorugh 配下かどうかを判定するヘルパーを用意しています。
+
+### 14.2. Deploy / Download（dired キーバインド）
+
+* `.` キー（`xsrv-deploy-dired`）：dired カーソル位置のファイルをサーバーに deploy
+* `,` キー（`xsrv-download-dired`）：xsrv-GH/xsrv-minorugh からローカル Dropbox にダウンロード
+
+### 14.3. xsrv 2ペイン表示
+
+`my-open-xsrv-2pane` で xsrv 側とローカル Dropbox 側を左右分割で表示します。アクティブウィンドウにはヘッダー強調（`#1A2640` 背景）とサーバー/ホームアイコンを付与します。ウィンドウ分割線（divider）はオレンジ（`#ff9900`）で強調します。
+
+### 14.4. [git-peek] コミット差分プレビュー
+
+Claudeと共同開発した自作パッケージです。`:vc` でインストールしています。xsrv 配下では差分表示後に 2 ペインを自動復元します。
+
+### 14.5. 動的フォルダー保護 & rsync lock
+
+gospel-haiku の動的フォルダー（kukai/data・voice など）を自動 read-only 化します。read-only を解除すると `~/xsrv-rsync.lock` を発行して rsync を停止し、全バッファを閉じたら自動で lock を解除します。`tempbuf` との連携で unlock し忘れを防ぎます。
+
+### 14.6. xsrv 配下バッファの背景色
+
+xsrv-GH / xsrv-minorugh 配下のファイルバッファは背景色（`#233B6C`）で識別できます。
+
+### 14.7. my-tig-bridge
+
+`my-tig-bridge.el` で tig と git-peek を連携させています。tig 側で `E` キーを押すと `emacsclient` 経由で `git-peek-from-hash` が呼ばれ、選択したコミットを git-peek で開きます。
+
+
+## 15. メモ環境（50-howm.el）
+
+### 15.1. [howm] Wiki 型メモ
+
+```elisp
+(leaf howm :ensure t
+  :hook (emacs-startup-hook . howm-mode)
+  :chord (("@@" . howm-list-all)
+          (",," . my-howm-create-with-category)))
+```
+
+メモは `~/Dropbox/howm/` に Markdown 形式（`.md`）で保存します。ファイル名は `%Y/%m/%Y%m%d%H%M.md` の形式です。タイトルヘッダーは `=`（howm デフォルトの `*` から変更）。
+
+### 15.2. カテゴリ定義
+
+通常カテゴリと特殊エントリの 2 種類を定義しています。
+
+| キー | カテゴリ | 挿入文字列 |
+|------|---------|---------|
+| `m` | memo | `memo: ` |
+| `i` | idea | `idea: ` |
+| `t` | tech | `tech: ` |
+| `d` | 日記 | `日記: ` |
+| `g` | 園芸 | `園芸: ` |
+
+特殊エントリ（`c`=code/Perlスクラッチ、`p`=創作/俳句ノート新規、`n`=推敲/俳句ノート）は外部関数に委譲します。
+
+### 15.3. カテゴリ色分け
+
+カテゴリごとにフェイスを定義し、記事バッファとサマリーバッファの両方に適用します。ライト/ダークテーマ対応の配色を設定しています。
+
+### 15.4. メモ作成（my-howm-create-with-category）
+
+`,,` または howm サマリーの `,` で起動します。縦リストでカテゴリを表示し、1 キーで選択して新規メモを作成します。特殊エントリは対応する関数を呼び出します。
+
+### 15.5. カテゴリ検索（my-howm-search-by-category）
+
+howm サマリーの `/` または `C-c /` で起動します。ivy でカテゴリを選択し、そのカテゴリのメモ一覧を表示します。
+
+### 15.6. ゴミ箱への移動（my-howm-move-to-trash）
+
+howm サマリーの `d` でカーソル行のメモを `tmp/trash/` に移動します（タイムスタンプ付きでリネーム）。
+
+### 15.7. Junk（Perl スクラッチ）
+
+`my-junk-new` でタイムスタンプ付き Perl スクラッチファイル（`~/Dropbox/howm/junk/YYYYMMDD.pl`）を作成します。
+
+
+## 16. Markdown 編集（60-markdown.el）
+
+### 16.1. 基本設定
+
+```elisp
+(leaf markdown-mode :ensure t
+  :mode (("README\\.md\\'" . gfm-mode)
+         ("\\.md\\'"       . markdown-mode))
+  :bind (("C-c RET" . markdown-follow-link-at-point)
+         ("C-c #"   . my-howm-fix-code-comments)
+         ("C-c C-c" . markdown-do-command)
+         ("M-RET"   . markdown-insert-list-item)))
+```
+
+### 16.2. プレビュー
+
+`pandoc` + Chrome でプレビューします。カスタム CSS（`markdown-cream.css`）と `highlight.js` を使ったシンタックスハイライト付きです。コードブロックへのシンタックスハイライトと見出しの段階的サイズ表示を有効化しています。
+
+### 16.3. howm コードコメント修正
+
+`my-howm-fix-code-comments`（`C-c #`、`my-markdown.el`）で howm ファイルのコードブロック内の `# ` を `## ` に置換します。リージョン選択時はバッファ内処理、非選択時は Perl スクリプト経由で処理します。
+
+`super-save` 後に自動実行する `my-howm-fix-after-super-save` も設定しています。
+
+### 16.4. PDF・docx 変換
+
+| 関数 | 変換先 |
+|------|-------|
+| `md2pdf` | pandoc + lualatex で PDF 生成 → `xdg-open` で表示 |
+| `md2docx` | pandoc で docx 生成 → `xdg-open` で表示 |
+
+### 16.5. 一時ファイル自動削除
+
+markdown バッファを閉じると `/tmp/burl*.html` を自動削除します。
+
+
+## 17. 翻訳（80-translate.el）
+
+### 17.1. DeepL API 翻訳
+
+2026-03-10 の DeepL API 仕様変更（認証方式を `auth_key` POST ボディから `Authorization` ヘッダー方式に変更）に対応済みです。以前は `deepl-translate` パッケージ（`:vc` インストール）を使用していましたが、規模が小さいため `80-translate.el` に直書きに変更しました。
+
+```elisp
+(leaf deepl-translate
+  :bind ("C-c d" . deepl-translate))
+```
+
+API キーは `~/.env_source/tokens/deepl-api.el` から読み込みます。日本語↔英語を自動判定して翻訳します。結果はエコーエリアに表示し、クリップボードにも追加します。
+
+3000 文字を超える場合は確認プロンプトを表示します。
+
+### 17.2. Google Web 翻訳
+
+```elisp
+(leaf google-translate-web
+  :bind ("C-c w" . my-google-translate))
+```
+
+リージョンまたはカーソル位置の文を取得し、Google Translate の Web サイトをブラウザで開きます。日本語↔英語を自動判定します。
+
+
+## 18. Hydra メニュー
+
+### 18.1. [hydra-dired] ファイルナビゲーター（70-hydra-dired.el）
+
+`<henkan>` で起動します。ディレクトリへのクイックアクセスと各種操作をまとめています。
+
+主な機能：
+
+* `d`：Dropbox、`e`：.emacs.d、`i`：inits、`s`：src、`h`：Dropbox/GH、`j`：Dropbox/minorugh.com
+* `;` / `:`：xsrv 2ペイン表示（GH / minorugh）
+* `k`/`b`/`m`/`u`：make ターゲット実行
+* `[`：git-peek、`-`：git-peek-deleted、`]`：make git
+* `t`：tig、`g`：counsel-git、`v`：markdown-preview
+* `@`：howm-list-all、`,`：howm 新規メモ
+* `r`：restart-emacs、`x`：xenv 再読み込み
+
+`<henkan>` で hydra-work と相互トグルできます。
+
+#### 補助コマンド
+
+* `my-open`：パスを dired/find-file で開く。`:pos 'top`/`'bottom`/整数 でカーソル位置を指定、`:omit` で omit-mode 無効化、`:emacs` で emacs-state に遷移
+* `my-make`：make ターゲットを指定ディレクトリで実行
+* `my-2pane-quit`：2ペインを閉じて元のバッファに戻る（divider 解除フック付き）
+* `my-reload-xenv`：`~/.xprofile` と keychain 環境変数を Emacs セッションに再読み込み
+* `keepassxc`：KeePassXC を起動
+* `filezilla`：FileZilla を特定サイトで起動（`g`=gospel-haiku、`m`=minorugh、`s`=サイトマネージャー）
+
+### 18.2. [hydra-work] 俳句作業メニュー（70-hydra-dired.el）
+
+`<henkan>`（hydra-dired から遷移）または `<f14>` で起動します。俳句・文芸関係のワークスペースへのショートカットが中心です。
+
+主な機能：
+
+* 各種文芸ファイルへのクイックアクセス（`d`：日記、`t`：定例、`s`：吟行、`k`：近詠 など）
+* `n`/`v`/`i`：yasnippet 操作
+* `p`/`r`：ps-print
+* `g`/`l`：gist / Lepton
+* `e`：easy-hugo
+* `c`/`u`/`o`：大文字化・小文字化
+
+### 18.3. [hydra-browse] ブラウザランチャー（70-hydra-browse.el）
+
+`..`（key-chord）で起動します。お気に入りサイトへのワンキーアクセスです。
+
+#### GitHub Deploy（`d` キー）
+
+`my-github-deploy` で `~/Dropbox/Changelog/` の `changelog-YYYYMMDD.md` を ivy で選択し、`CHANGELOG.md` の先頭に追記して `make git` で push します。
+
+
+## 19. ブログ管理（80-easy-hugo.el）
 
 [`easy-hugo`](https://github.com/masasam/emacs-easy-hugo) で Hugo 製のブログを管理しています。
 
-メインブログ（snap）を blog1 として、`easy-hugo-bloglist` で blog2〜8 まで計8サイトを管理しています。
+メインブログ（snap）を blog1 として、`easy-hugo-bloglist` で blog2〜8 まで計 8 サイトを管理しています。
 
-```code
-(setq easy-hugo-basedir "~/Dropbox/minorugh.com/snap/")
-(setq easy-hugo-url    "https://snap.minorugh.com")
+| ブログ | URL |
+|-------|-----|
+| blog1（main） | snap.minorugh.com |
+| blog2 | minorugh.github.io |
+| blog3〜8 | minorugh.com サブサイト群 |
+
+新規ポスト作成後は `advice-add` で `my-easy-hugo-newpost-after` を実行し、`evil-emacs-state` に切り替えてカーソルを末尾に移動・保存します。
+
+`e` キーで設定ファイル（`80-easy-hugo.el`）を直接開けます。
+
+
+## 20. Neotree（80-neotree.el）
+
+```elisp
+(leaf neotree :ensure t
+  :bind (("<f7>" . my-neotree-toggle)))
 ```
 
-新規ポスト作成後は `advice-add` で `my:easy-hugo-newpost-after` を実行し、`evil-emacs-state` に切り替えてカーソルを末尾に移動・保存します。
+`doom-themes-neotree-config` でテーマと統合しています。
 
-`e` キーで設定ファイル（`90-easy-hugo.el`）を直接開けます。
+`my-neotree-toggle` は現在のファイルまたはディレクトリを基準にツリーを表示します。ファイルを開いたら Neotree を自動で閉じます（`neotree-enter-hide`）。起動時にテキストを 1 段階縮小します（`neotree-text-scale`）。モードラインは非表示です。
+
+`j`/`k` で移動、`a` で隠しファイルトグル、`<left>`/`<right>` で親/子ディレクトリへ移動します。
 
 
-## 26. おわりに
+## 21. 執筆モード（90-darkroom.el）
+
+`darkroom` パッケージを使わず、独自の `my-darkroom-mode`（マイナーモード）として実装しています。
+
+`<f8>` でトグルします。
+
+### 21.1. カスタマイズ可能な変数
+
+| 変数 | デフォルト | 説明 |
+|------|---------|------|
+| `my-darkroom-margin` | 0.15 | サイドマージンの比率（ウィンドウ幅の 15%） |
+| `my-darkroom-text-scale` | 2 | テキストズームレベル |
+| `my-darkroom-line-spacing` | 0.2 | 行間 |
+
+### 21.2. IN/OUT の動作
+
+**IN 時：**
+* 行番号・whitespace-mode を無効化
+* モードライン・ヘッダーラインを非表示
+* 全画面・サイドマージン適用・行間を広げる
+* IME が OFF なら自動で ON にする
+
+**OUT 時（`<f8>` で戻る）：**
+* すべて元に戻す
+* IME を OFF にする
+
+### 21.3. NeoMutt 連携
+
+NeoMutt が外部エディタとして `neomutt-XXXX` バッファを開いたとき、自動で darkroom に入ります。`C-x #`（server-edit）で抜けるときも `server-done-hook` で確実に終了します。
+
+
+## 22. ローカルパッケージ（elisp/）
+
+### 22.1. seiho-haiku.el
+
+阿波野青畝の俳句データ 366 日分を収録したローカルパッケージです。`dashboard` の「今日の一句」ウィジェットから呼ばれます。フォント・ウェイト・ボックスカラーなどの表示設定は変数でカスタマイズできます。
+
+### 22.2. my-template.el
+
+俳句・文芸活動用のファイルテンプレート関数を定義しています。`hydra-work` から呼び出します。
+
+* `my-diary-new-post`：日記ファイルに当日エントリを挿入
+* `my-haiku-note-post`：俳句ノートに当日エントリを挿入（重複防止）
+* `my-teirei-new-post` / `my-swan-new-post` など：各句会テキストのテンプレート挿入
+
+### 22.3. my-sen-cleanup.el
+
+俳句選者作業（`minoru_sen.txt`）用の Perl スクリプト連携パッケージです。
+
+* `my-sen-cleanup`（`;c`）：`sen_cleanup.pl` を非同期実行し、成功で `revert-buffer`
+* `my-sen-restore`（`;r`）：`.tmp` ファイルから復元
+
+### 22.4. my-markdown.el
+
+`my-howm-fix-code-comments`・`gen-toc-term` を定義しています。
+
+### 22.5. my-tig-bridge.el
+
+`my-open-tig`（`t` キー in dired）で tig を gnome-terminal で起動し、コンテキスト（ファイルパス）を `/tmp/tig-peek-context` に書き出します。tig 側の `E` キーで `emacsclient` 経由で `git-peek-from-hash` を呼び、選択コミットを git-peek で開きます。
+
+### 22.6. my-evil-cheat-sheet.el
+
+`?` キーで呼び出せる evil キーバインドチートシートです。ivy ジャンプとセクションジャンプを実装しています。
+
+
+## 23. おわりに
 
 私の Emacs は、Web ページのメンテナンスや俳句・文芸活動がメインで、「賢くて多機能なワープロ」という存在です。
 
 本設定の特徴をまとめると以下のとおりです。
 
-* **evil-mode** を中心とした vi/vim スタイルの操作体系
+* **evil-mode** を中心とした vi/vim スタイルの操作体系（`i` のみ編集トリガー）
 * **leaf.el** による宣言的なパッケージ管理
-* **howm** + **org** + **markdown** によるメモ・文書管理
+* **howm** + **markdown** によるメモ・文書管理
 * **hydra** による階層的なコマンドランチャー（hydra-dired / hydra-work / hydra-browse）
 * **nerd-icons** / **doom-themes** / **doom-modeline** による現代的な UI
 * `tmp/` 配下への履歴・キャッシュの一元管理
 * `elisp/` 配下へのローカルパッケージの集約
+* **xsrv** との rsync lock・2ペイン連携による安全なサーバーファイル管理
+* **git-peek** + **my-tig-bridge** による Git 差分プレビュー
 
 <div style="float:left">
 &ensp;<a href="https://twitter.com/share" class="twitter-share-button" data-via="minorugh" data-lang="jp" data-count="horizontal">Tweet</a>
