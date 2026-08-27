@@ -13,7 +13,7 @@ title: Emacs Configuration
 * 本ドキュメントは、[@takaxp](https://twitter.com/takaxp)さんの了解を得て [takaxp.github.io/](https://takaxp.github.io/init.html) の記事を下敷きにした模倣版です。
 ```
 
-![emacs](https://minorugh.github.io/img/emacs29.4.png)
+![emacs](https://minorugh.github.io/img/emacs30.2.png)
 
 ### 1.1. 動作確認環境
 
