@@ -10,7 +10,6 @@ title: Emacs Configuration
 ```note
 * ここは [@minoruGH](https://twitter.com/minorugh) の Emacs設定ファイルの一部を解説しているページです。
 * [init.el](https://github.com/minorugh/dotfiles/blob/main/.emacs.d/init.el) 本体は、[GitHub](https://github.com/minorugh/dotfiles/tree/main/.emacs.d) に公開しています。
-* 本ドキュメントは、[@takaxp](https://twitter.com/takaxp)さんの了解を得て [takaxp.github.io/](https://takaxp.github.io/init.html) の記事を下敷きにした模倣版です。
 ```
 
 ![emacs](https://minorugh.github.io/img/emacs30.2.png)
@@ -21,7 +20,7 @@ title: Emacs Configuration
 
 * ThinkPad P1 Gen1 i7/32GB/1TB
 * Debian 12.x x86_64 GNU/Linux
-* 自分でビルドした GNU Emacs 29.4
+* 自分でビルドした GNU Emacs 30.2
 
 ### 1.2. ディレクトリ構成
 
