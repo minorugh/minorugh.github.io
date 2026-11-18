@@ -388,8 +388,7 @@ alias eq="emacs -q -l ~/.emacs.d/init-mini.el"
          ("s-c"        . clipboard-kill-ring-save)
          ("s-v"        . clipboard-yank)
          ("C-q"        . other-window-or-split)
-         ("C-<tab>"    . quoted-insert)
-         ("S-<return>" . (lambda () (interactive) (end-of-line) (newline)))))
+         ("C-<tab>"    . quoted-insert)))
 ```
 
 `*.log` を開くと自動で `view-mode`（＋ evil-emacs-state）に、`*.dat` を開くと自動で read-only にする `find-file-hook` を追加しています。`C-w` はリージョンがあれば `clipboard-kill-region`、なければ `backward-kill-word` として働く `my-clipboard-kill-region` にバインドしています。最後のフレームを閉じようとしたとき、削除せず最小化する `handle-delete-frame` の上書きも設定しています。
@@ -731,9 +730,11 @@ F1〜F12 キーのバインドをここで一元管理しています。
 | `<f7>` | my-calendar-toggle（99-calendar.el） |
 | `<f8>` | my-darkroom-toggle（90-darkroom.el） |
 | `<f9>` | display-line-numbers-mode（built-in） |
-| `<f10>` | toggle-scratch-buffer |
+| `<f10>` | my-git-status（02-git.el） |
 | `<f11>` | toggle-frame-fullscreen（built-in） |
 | `<f12>` | toggle-emacs（最小化/復元スクリプト） |
+
+`<f14>` は `my-hydra-work`（80-hydra-navication.el）です。keychron 専用のキーなので、PC 単体やサブ機では hydra-dired から `<henkan>` で開きます。`<f10>` の `my-git-status` は、PC のキーボードでも使えるよう、F14 から移しました。
 
 ### 8.1. 外部モニター対応の gnome-terminal 起動
 
@@ -742,10 +743,6 @@ F1〜F12 キーのバインドをここで一元管理しています。
 ### 8.2. xsrv-open-this
 
 `<f4>` は dired バッファでのみ動作し、カレントディレクトリが `xsrv-mirror-map`（`~/Dropbox/GH/` / `~/Dropbox/minorugh.com/`）配下であれば、対応する xsrv 上のパスに変換して SSH ターミナルを開きます。対象外のディレクトリでは `user-error` を出します。
-
-### 8.3. scratch バッファの永続化
-
-`after-init-hook` で `tmp/scratch` から復元し、`kill-emacs-hook` で書き出します。`<f10>`（`toggle-scratch-buffer`）で `*scratch*` と直前のバッファをトグルします。
 
 
 ## 9. 編集サポート（09-edit.el）
@@ -835,6 +832,10 @@ evil の undo システムも `undo-fu` に統一しています（`evil-undo-sy
 
 * `my-php-mode`：`prog-mode` 派生で、PHP の色付けだけを行います。`.php` に関連付けています
 * `my-csv-mode` / `my-tsv-mode`：桁揃えだけを行います。`.csv` / `.tsv` に関連付けています
+
+### 9.8. scratch バッファの永続化
+
+`kill-emacs-hook` で `*scratch*` の内容を `tmp/scratch` に書き出し、`after-init-hook` で復元します。`S-<return>`（`toggle-scratch-buffer`）で、`*scratch*` と直前のバッファをトグルします。
 
 
 ## 10. Makefile 連携（10-makefile.el）
@@ -1055,8 +1056,8 @@ Emacs 30 の file-name 補完を dired のコピー時に上書きしないよ�
 | `n` | 外部ターミナルで GNU nano を起動 |
 | `a` | dired-omit-mode トグル |
 | `/` | swiper で絞り込み、確定したらそのファイルを開く |
-| `[` | ディレクトリ配下の履歴を tig で開く（open-tig-project、02-git.el） |
-| `]` | ファイルの履歴を tig で開く（my-open-tig、02-git.el） |
+| `[` | ファイルの履歴を tig で開く（my-open-tig、02-git.el） |
+| `]` | make git を実行（my-make-git、02-git.el） |
 | `p` | git-peek（02-git.el） |
 | `-` | git-peek-deleted（02-git.el） |
 | `P` | パーミッション早見表 |
@@ -1113,9 +1114,10 @@ deploy（`xsrv-deploy-dired`）と download（`xsrv-download-dired`）が非対�
 
 commit と push を分ける運用の設定で、tig を git 操作の入口にしています。tig は新しい gnome-terminal で開き、tig を終了すると端末も閉じます。
 
-* `<f14>`（`my-git-status`）：リポジトリ全体の `tig status`（git 操作の入口）
-* dired の `[`（`open-tig-project`）：カレントディレクトリ配下の履歴
-* dired の `]`（`my-open-tig`）：開いているファイル（dired なら行のファイル）の履歴。環境変数 `TIG_PEEK_FILE` に対象ファイルのパスを入れて tig を起動します
+* `<f10>`（hydra-dired は `g`、`my-git-status`）：開いているファイル（dired なら行のファイル）のリポジトリの `tig status`（git 操作の入口）
+* dired の `[`、hydra-dired の `t`（`my-open-tig`）：開いているファイル（dired なら行のファイル）の履歴。環境変数 `TIG_PEEK_FILE` に対象ファイルのパスを入れて tig を起動します
+* dired と hydra-dired の `]`（`my-make-git`）：カレントディレクトリで `make git` を実行します。メイン機は compile バッファで push、サブ機は端末で pull します
+* hydra-dired の `[`（`make auto-commit`）：dotfiles/git で、`prep` のあと全変更を `auto:` の仮メッセージで commit します。push はしないので、typo 修正のような軽い変更はこれで積み、push は `]` か、NIGHT SUSPEND などの自動実行（`make git-auto`）に任せます。メイン機専用です
 * tig の `c`・`a`・`R`：`tig-git.sh` が emacsclient 経由で `commit-msg.el`（23.1）を呼び、commit・reword します
 * tig の `E`：`tig-git.sh peek` と emacsclient 経由で `my-git-peek-from-hash` を呼び、選んだコミットを git-peek で開きます（`~/.config/tig/config` に `bind generic E` の設定が必要）。`TIG_PEEK_FILE` が空の画面では、警告を出すだけで何もしません
 
@@ -1317,15 +1319,15 @@ API キーは `~/.env_source/tokens/deepl-api.el` から読み込みます。日
 
 * `d`：Dropbox、`e`：.emacs.d、`i`：inits、`s`：src、`.`：dotfiles、`h`：Dropbox/GH、`j`：Dropbox/minorugh.com、`/`：ルート、`<home>`：ホームディレクトリ
 * `;` / `:`：xsrv 2ペイン表示（minorugh / GH）
-* `k`/`b`/`m`/`u`：make ターゲット実行（-k/bk/mv/up）、`a`：dotfiles/git で `make git-auto`、`^`：cron の Makefile を開いてターゲットピッカーを起動
-* `[`：open-tig-project、`]`：my-open-tig、`g`：git-peek
+* `k`/`b`/`m`/`u`：make ターゲット実行（-k/bk/mv/up）、`^`：cron の Makefile を開いてターゲットピッカーを起動
+* `g`：my-git-status、`[`：auto-commit（dotfiles/git で `make auto-commit`）、`]`：my-make-git、`t`：my-open-tig
 * `v`：markdown-preview、`o`：howm-list-all、`,`：howm 新規メモ
 * `@`：browse-at-remote、`f`：flymake-show-buffer-diagnostics
 * `l`：cl リポジトリ（changelog）、`w`：piclink リポジトリ（どちらもメイン機のみ）
 * `8`/`9`/`0`：FileZilla（サイトマネージャー／gospel-haiku／minorugh）、`p`：keepassxc、`n`：Simplenote
 * `r`：my-restart-emacs、`x`：my-env-recover、`_`：delete-other-windows
 
-`<henkan>` で hydra-work と相互トグルできます。
+`<henkan>` または `<f14>` で hydra-work と相互トグルできます。
 
 #### 補助コマンド
 
@@ -1342,7 +1344,7 @@ API キーは `~/.env_source/tokens/deepl-api.el` から読み込みます。日
 
 ### 20.2. [hydra-work] 俳句作業メニュー（80-hydra-navication.el）
 
-normal state の `,`（または hydra-dired から `<henkan>`）で起動します。俳句・文芸関係のワークスペースへのショートカットが中心です。起動時に `post-template`（23.9）を読み込みます。
+keychron の `<f14>`、または hydra-dired から `<henkan>` で起動します。俳句・文芸関係のワークスペースへのショートカットが中心です。起動時に `post-template`（23.9）を読み込みます。
 
 主な機能：
 
@@ -1354,9 +1356,10 @@ normal state の `,`（または hydra-dired から `<henkan>`）で起動しま
 * `g`/`G`/`l`：gist／gist のページ／Lepton
 * `e`：easy-hugo
 * `c`/`u`/`o`：大文字化・小文字化
-* `J`/`h`：howm junk / howm ディレクトリ
-* `j`：マークした WebP を JPG に変換（`my-webp-to-jpg`）
+* `j`/`h`：howm junk / howm ディレクトリ
 * `+`：text-scale-adjust
+
+`<f14>` と `<henkan>` のどちらでも hydra-dired に戻れます。WebP から JPG への変換（旧 `my-webp-to-jpg`）は、zshrc の設定に移しました。
 
 ### 20.3. [hydra-browse] ブラウザランチャー（80-hydra-browse.el）
 
