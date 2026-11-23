@@ -29,9 +29,9 @@ title: Emacs Configuration
 ```
 ~/.emacs.d
 │
+├── bin/                          ← Emacs から呼ぶスクリプト
+├── css/                          ← Markdown プレビュー用の CSS・JS
 ├── elisp/                        ← ローカルパッケージ置き場
-│   ├── bin/
-│   ├── css/
 │   ├── Makefile
 │   ├── README.md
 │   ├── commit-msg.el
@@ -1086,7 +1086,7 @@ xsrv（Xserver）との連携設定をすべてここに集約しています。
 
 FileZilla のようにサーバーへ直接繋いで転送するのではなく、「サーバー → ミラー（xsrv-GH／xsrv-minorugh） → ローカル（Dropbox）」という2段階構成にしています。ミラーはサーバー側の変更を一旦受け止めて目視できる検疫スペースとして機能し、予期しない変更が確認なしに作業コピーへ流れ込むことを防ぎます。
 
-* サーバー → ミラー：`xsrv-backup-smart.sh`（elisp/bin/）による自動 rsync
+* サーバー → ミラー：`xsrv-backup-smart.sh`（bin/）による自動 rsync
 * ミラー → ローカル：2ペインの dired で目視しながら、必要なファイルだけを選んで取り込む
 
 deploy（`xsrv-deploy-dired`）と download（`xsrv-download-dired`）が非対称な設計なのもこのためです。deploy はローカルで確定した内容を能動的にサーバーへ送るだけですが、download は宛先を `my-xsrv-roots` の対応表で固定し、確認ダイアログを必須にして誤上書きを防いでいます。
@@ -1457,7 +1457,7 @@ dired の `P` キーから呼び出すパーミッション早見表です（詳
 
 ### 23.5. evil-leader-tools.el
 
-俳句選者作業（`minoru_sen.txt`）用の Perl スクリプト連携です。normal state リーダーキー `;c` / `;r`（03-evil.el）から呼び出します。スクリプトは `elisp/bin/sen_cleanup.pl` です。
+俳句選者作業（`minoru_sen.txt`）用の Perl スクリプト連携です。normal state リーダーキー `;c` / `;r`（03-evil.el）から呼び出します。スクリプトは `bin/sen_cleanup.pl` です。
 
 * `my-sen-cleanup`：実行前に `.tmp` へバックアップを作り、`sen_cleanup.pl` を非同期実行して、`*sen-cleanup*` バッファにストリーミング表示。成功で元のバッファへ `revert-buffer`
 * `my-sen-restore`：`.tmp` ファイルから復元
